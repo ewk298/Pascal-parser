@@ -1,0 +1,32 @@
+{ the following comments may prove difficult }
+(*adfs*)u(*asdfsd*)v(*asdfsdf*)w(*sadfsdf*)x(*asdfsdf*)y(*sdfs*)z
+(* *) 6 (***) 5 (****) 4 (*****) 3 (******) 2 (*)*) 1
+(* *) 6 (***) 5 (****)4(*****)3(******)2(*)*)1
+
+{ You may assume the following limits on numbers: }
+
+{ 2147483647 is the maximum unsigned integer:  2 ^ 31 - 1. }
+
+{ floating point can range from 1.175495E-38 to 3.402823E+38 }
+{ we will assume that at most 8 significant mantissa digits can be carried. }
+
+'What the #&*%!'
+'Don''t forget'	{fix the double quotes}
+'Maximum of 15 characters'
+array begin case const do downto else end file for function goto if label nil of packed procedure program record repeat set then to type until var while with
+
++ - * / := = <> < <= >= > ^ .
+
+and or not div mod in
+
+, ; : ( ) [ ] ..
+
+3E9
+
+5e10
+1234567890
+2147483647 - 7;
+2147483648                      {too big by 1}
+
+'m''l''g'
+''m''l''g''

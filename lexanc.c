@@ -1,0 +1,1 @@
+/* use lexandr.c instead.  See the makefile .    */
