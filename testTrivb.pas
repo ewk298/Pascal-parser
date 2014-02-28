@@ -1,4 +1,5 @@
-{my second lexer doesn't work with multiline comments. test with original trivb.pas before turnin}
+{my second lexer doesn't work with m
+ultiline comments. test with original trivb.pas before turnin}
 program graph1(output);
 var i,lim : integer;
 begin

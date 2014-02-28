@@ -106,7 +106,7 @@ TOKEN parseresult;
 			| vargroup SEMICOLON
 			;
 			
-	vargroup: idlist COLON type 				{/*instvars($1, $3);*/}
+	vargroup: idlist COLON type 				{instvars($1, $3);}
 			 
 	type	: simpletype						{$$ = $1;}
 			;
@@ -174,6 +174,29 @@ TOKEN parseresult;
    /*  Note: you should add to the above values and insert debugging
        printouts in your routines similar to those that are shown here.     */
 
+/* instvars will install variables in symbol table.
+   typetok is a token containing symbol table pointer for type. */
+void  instvars(TOKEN idlist, TOKEN typetok){
+	printf("installing variables\n");
+	SYMBOL sym, typesym; int align;
+	//typesym = typetok->symtype;				//this doesnt work but was provided in class notes. 
+	typesym = searchst(typetok->stringval);		//this works though...
+	printf("typesym = %d\n", typesym);
+	align = alignsize(typesym);
+	printf("here\n");
+	//for each id
+	while(idlist != NULL){ 		
+		sym = insertsym(idlist->stringval);
+		sym->kind = VARSYM;
+		sym->offset = wordaddress(blockoffs[blocknumber], align);
+		sym->size = typesym->size;
+		blockoffs[blocknumber] = sym->offset + sym->size;
+		sym->datatype = typesym;
+		sym->basicdt = typesym->basicdt;
+		idlist = idlist->link;
+	}
+}
+	   
 //returns a copy of the token
 TOKEN copytoken(TOKEN tok){
 	TOKEN new = talloc();

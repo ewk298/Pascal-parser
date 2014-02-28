@@ -40,6 +40,7 @@ int install_num();
 int install_fnum();
 int install_string();
 void finish_comment();
+void first_type();
 int yywrap();
 
 /* If the lex yytext buffer turns out to be too small to hold comments,
@@ -60,7 +61,7 @@ digit    [0-9]
 id       {letter}({letter}|{digit})*
 number	 {digit}*
 fnumber  {digit}+(\.{digit}+)?((E|e)?[+\-]?{digit}+)?
-comm1  	 \{(.*?)\}
+comm1  	 "{"
 comm2    "(*"
 string	 '(.*?)'
 %%
@@ -125,7 +126,7 @@ with		{return(maketoken(RESERVED, WITH));}
 {id}      	{return(install_id());}
 {number}	{return(install_num());}
 {fnumber} 	{return(install_fnum());}
-{comm1}		{ /*do nothing*/}
+{comm1}		{first_type();}
 {comm2}		{finish_comment();}
 {string}    {return(install_string());}
 
@@ -160,6 +161,12 @@ int maketoken(int type, int which)
 		c = cc;
 		cc = input();
 	}
+ }
+ 
+ void first_type(){
+	int c = 0;
+	while(c != '}')
+		c = input();
  }
  
 int install_string(){
