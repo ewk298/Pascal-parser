@@ -87,7 +87,7 @@ TOKEN parseresult;
 	convert($1, PROGRAMOP);		//fix this garbage
 	link($1, $2);
 	$2->link = makeprogn($5, $4);
-	$4->link = $7;
+	$5->link = $7;
 	$4->operands = $7;
 	
 	parseresult = $1;
@@ -192,13 +192,14 @@ TOKEN parseresult;
 TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
               TOKEN tokc, TOKEN statement)
 {
-	convert(tokb, LABELOP);
+	convert(tokb, LABELOP);			//make a new number for the label. use unaryop??
 	makeprogn(tok, asg);
-	tok->link = tokb;
+	asg->link = tokb;
+	TOKEN new = talloc();
+	new->tokentype = OPERATOR;
+	new->datatype = STRINGTYPE;
 	return tok;
 }
-
-
 
 /*link tok with other*/
 TOKEN link(TOKEN tok, TOKEN other){
