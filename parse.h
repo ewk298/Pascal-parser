@@ -201,3 +201,5 @@ TOKEN convert(TOKEN tok, int opnum);
 
 /*link tok with other*/
 TOKEN link(TOKEN tok, TOKEN other);
+
+TOKEN copytoken(TOKEN tok);

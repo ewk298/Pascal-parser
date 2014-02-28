@@ -118,26 +118,16 @@ TOKEN parseresult;
 	simpletype: IDENTIFIER						{/*$$ = findtype($1);*/}
 			;
   statement  :  BEGINBEGIN statement endpart
-                                       { $$ = makeprogn($1,cons($2, $3)); }
-             |  IF expr THEN statement endif   { $$ = makeif($1, $2, $4, $5); }
+													{ $$ = makeprogn($1,cons($2, $3)); }
+             |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
              |  assignment
-			 | 	FOR assignment TO expr DO statement		
- {
-	/* TOKEN newLabel = copytok($3);
-	TOKEN number = copytok($3);
-	number->tokentype = NUMBERTOK;
-	number->datatype = INTEGER;
-	number->intval = 0;
-	newLabel->whichval = LABELOP;
-	
-	unaryop(newLabel, number); */
-	
-	$$ = makefor(1, $1, $2, $3, $4, $5, $6);
-	
-	
- /*process for loop*/
- 
- }
+			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
+	         | IDENTIFIER LPAREN STRING RPAREN		
+			 { 
+				//change rule above. only accepts strings right now
+				$$ = makefuncall($2, $1, $3);
+			 
+			 }
              ;
 			 
   endpart    :  SEMICOLON statement endpart    { $$ = cons($2, $3); }
@@ -184,6 +174,33 @@ TOKEN parseresult;
    /*  Note: you should add to the above values and insert debugging
        printouts in your routines similar to those that are shown here.     */
 
+//returns a copy of the token
+TOKEN copytoken(TOKEN tok){
+	TOKEN new = talloc();
+	new->tokentype = tok->tokentype;
+	new->datatype = tok->datatype;
+	new->symtype = tok->symtype;
+	new->symentry = tok->symentry;
+	new->operands = tok->operands;
+	new->link = tok->link;
+	new->realval = tok->realval;
+	return new;
+}
+
+/* makefuncall makes a FUNCALL operator and links it to the fn and args.
+   tok is a (now) unused token that is recycled. */
+TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
+{
+	TOKEN func = copytoken(tok);
+	func->tokentype = OPERATOR;
+	func->datatype = STRINGTYPE;
+	func->whichval = FUNCALLOP;
+	func->link = NULL;
+	cons(fn, args);
+	func->operands = fn;
+	return func;
+}
+
 /* makefor makes structures for a for statement.
    sign is 1 for normal loop, -1 for downto.
    asg is an assignment statement, e.g. (:= i 1)
@@ -192,12 +209,61 @@ TOKEN parseresult;
 TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
               TOKEN tokc, TOKEN statement)
 {
+	//creating label operator token
 	convert(tokb, LABELOP);			//make a new number for the label. use unaryop??
 	makeprogn(tok, asg);
-	asg->link = tokb;
-	TOKEN new = talloc();
-	new->tokentype = OPERATOR;
-	new->datatype = STRINGTYPE;
+	cons(asg, tokb);
+	//creating number for label
+	TOKEN new = talloc();			//use this for number of label??
+	new->tokentype = NUMBERTOK;
+	new->datatype = INTEGER;
+	new->intval = labelnumber++;
+	//connecting label to its number
+	unaryop(tokb, new);
+	//creating ifop
+	TOKEN ifop = talloc();
+	ifop->tokentype = OPERATOR;
+	ifop->datatype = STRINGTYPE;
+	ifop->whichval = IFOP;
+	cons(tokb, ifop);
+	//creating assignment statement
+	TOKEN lteop = talloc();
+	lteop->tokentype = OPERATOR;
+	lteop->datatype = STRINGTYPE;
+	lteop->whichval = LEOP;
+	unaryop(ifop, lteop);
+	//add operands to LEOP
+	TOKEN i = copytoken(asg->operands);
+	binop(lteop, i, endexpr);
+	//connect progn to LEOP
+	TOKEN newProgn = makeprogn(copytoken(i), statement);
+	newProgn->link = NULL;				//null link left over from copying
+	cons(lteop, newProgn);
+	
+	//part for incrementing loop variable
+	TOKEN assignop = copytoken(ifop);
+	assignop->whichval = ASSIGNOP;
+	//create second operand of incrementation
+	TOKEN plusop = copytoken(assignop);
+	plusop->whichval = PLUSOP;
+	plusop->link = NULL;
+	TOKEN one = copytoken(new);
+	one->intval = 1;
+	binop(plusop, copytoken(i), one);
+	binop(assignop, copytoken(i), plusop);
+	cons(statement, assignop);
+	
+	//create goto
+	TOKEN gotok = copytoken(plusop);
+	gotok->whichval = GOTOOP;
+	gotok->link = NULL;
+	TOKEN zero = copytoken(one);
+	zero->intval = 0;
+	zero->link = NULL;
+	zero->operands = NULL;
+	gotok->operands = zero;
+	cons(assignop, gotok);
+	
 	return tok;
 }
 

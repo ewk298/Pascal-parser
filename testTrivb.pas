@@ -4,5 +4,5 @@ var i,lim : integer;
 begin
    lim := 7;
    for i := 0 to lim do
-      lim := 7
+      writeln('*')
 end. 
