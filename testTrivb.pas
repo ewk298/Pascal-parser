@@ -1,3 +1,8 @@
 {my second lexer doesn't work with multiline comments. test with original trivb.pas before turnin}
 program graph1(output);
-begin i:=j; if i+j then x:=a+b*c else x:=a*b+c; k:=i end.
+var i,lim : integer;
+begin
+   lim := 7;
+   for i := 0 to lim do
+      lim := 7
+end. 

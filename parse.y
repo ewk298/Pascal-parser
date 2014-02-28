@@ -76,15 +76,68 @@ TOKEN parseresult;
 
 
 %%
- /*program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON statement DOT    { parseresult = makeprogn($1, cons($2, $7));}*/
+ /*program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON statement DOT    { parseresult = makeprogn($1, $7);}*/
  
-  program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON statement DOT    { parseresult = $7;}
+  program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON block DOT    
+  { 	
+  
+	/* convert($1, PROGRAMOP);
+	parseresult = unaryop($1, $2); */
+	/* parseresult = unaryop(makeprogn($1, $4), $7); */
+	convert($1, PROGRAMOP);		//fix this garbage
+	link($1, $2);
+	$2->link = makeprogn($5, $4);
+	$4->link = $7;
+	$4->operands = $7;
+	
+	parseresult = $1;
+  
+  }
              ;
 			 
+	block	: statement 					{$$ = $1;}
+			| vblock statement				{$$ = $2;}
+			;
+			 
+	vblock	: VAR varspecs				{$$ = $2;}
+			;
+			
+	varspecs: vargroup SEMICOLON varspecs
+			| vargroup SEMICOLON
+			;
+			
+	vargroup: idlist COLON type 				{/*instvars($1, $3);*/}
+			 
+	type	: simpletype						{$$ = $1;}
+			;
+			
+	idlist  : IDENTIFIER COMMA idlist 			{$$ = cons($1, $3);}
+			| IDENTIFIER 						{$$ = cons($1, NULL);}
+			;
+			
+	simpletype: IDENTIFIER						{/*$$ = findtype($1);*/}
+			;
   statement  :  BEGINBEGIN statement endpart
                                        { $$ = makeprogn($1,cons($2, $3)); }
              |  IF expr THEN statement endif   { $$ = makeif($1, $2, $4, $5); }
              |  assignment
+			 | 	FOR assignment TO expr DO statement		
+ {
+	/* TOKEN newLabel = copytok($3);
+	TOKEN number = copytok($3);
+	number->tokentype = NUMBERTOK;
+	number->datatype = INTEGER;
+	number->intval = 0;
+	newLabel->whichval = LABELOP;
+	
+	unaryop(newLabel, number); */
+	
+	$$ = makefor(1, $1, $2, $3, $4, $5, $6);
+	
+	
+ /*process for loop*/
+ 
+ }
              ;
 			 
   endpart    :  SEMICOLON statement endpart    { $$ = cons($2, $3); }
@@ -131,6 +184,37 @@ TOKEN parseresult;
    /*  Note: you should add to the above values and insert debugging
        printouts in your routines similar to those that are shown here.     */
 
+/* makefor makes structures for a for statement.
+   sign is 1 for normal loop, -1 for downto.
+   asg is an assignment statement, e.g. (:= i 1)
+   endexpr is the end expression
+   tok, tokb and tokc are (now) unused tokens that are recycled. */
+TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
+              TOKEN tokc, TOKEN statement)
+{
+	convert(tokb, LABELOP);
+	makeprogn(tok, asg);
+	tok->link = tokb;
+	return tok;
+}
+
+
+
+/*link tok with other*/
+TOKEN link(TOKEN tok, TOKEN other){
+	tok->tokentype = OPERATOR;
+	tok->link = other;
+	tok->operands = other;
+	return tok;
+}	
+
+/*converts one token to another type*/
+TOKEN convert(TOKEN tok, int opnum){
+	tok->tokentype = OPERATOR;
+	tok->whichval = opnum;
+	return tok;
+}
+	   
 TOKEN cons(TOKEN item, TOKEN list)           /* add item to front of list */
   { item->link = list;
     if (DEBUG & DB_CONS)
@@ -153,6 +237,13 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
        };
     return op;
   }
+  
+/* unaryop links a unary operator op to one operand, lhs */
+TOKEN unaryop(TOKEN op, TOKEN lhs){
+	op->operands = lhs;
+	lhs->link = NULL;
+	return op;
+}
 
 TOKEN makeif(TOKEN tok, TOKEN exp, TOKEN thenpart, TOKEN elsepart)
   {  tok->tokentype = OPERATOR;  /* Make it look like an operator   */

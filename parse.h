@@ -193,3 +193,11 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok);
 
 /* talloc allocates a new TOKEN record. */
 TOKEN talloc();
+
+
+/*my methods here*/
+/*converts one token to another type*/
+TOKEN convert(TOKEN tok, int opnum);
+
+/*link tok with other*/
+TOKEN link(TOKEN tok, TOKEN other);
