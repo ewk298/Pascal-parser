@@ -203,3 +203,6 @@ TOKEN convert(TOKEN tok, int opnum);
 TOKEN link(TOKEN tok, TOKEN other);
 
 TOKEN copytoken(TOKEN tok);
+
+//processes the first part of program
+TOKEN processProgram(TOKEN tok1, TOKEN tok2, TOKEN tok3, TOKEN tok4, TOKEN tok5);

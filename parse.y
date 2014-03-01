@@ -78,28 +78,14 @@ TOKEN parseresult;
 %%
  /*program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON statement DOT    { parseresult = makeprogn($1, $7);}*/
  
-  program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON block DOT    
-  { 	
-  
-	/* convert($1, PROGRAMOP);
-	parseresult = unaryop($1, $2); */
-	/* parseresult = unaryop(makeprogn($1, $4), $7); */
-	convert($1, PROGRAMOP);		//fix this garbage
-	link($1, $2);
-	$2->link = makeprogn($5, $4);
-	$5->link = $7;
-	$4->operands = $7;
-	
-	parseresult = $1;
-  
-  }
+  program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON block DOT    { parseresult = processProgram($1, $2, $4, $5, $7);}
              ;
 			 
-	block	: statement 					{$$ = $1;}
-			| vblock statement				{$$ = $2;}
+	block	: vblock					
+			| statement						
 			;
 			 
-	vblock	: VAR varspecs				{$$ = $2;}
+	vblock	: VAR varspecs block				{$$ = $3;}
 			;
 			
 	varspecs: vargroup SEMICOLON varspecs
@@ -126,7 +112,6 @@ TOKEN parseresult;
 			 { 
 				//change rule above. only accepts strings right now
 				$$ = makefuncall($2, $1, $3);
-			 
 			 }
              ;
 			 
@@ -173,17 +158,25 @@ TOKEN parseresult;
 
    /*  Note: you should add to the above values and insert debugging
        printouts in your routines similar to those that are shown here.     */
+	   
+//processes first part of program
+TOKEN processProgram(TOKEN tok1, TOKEN tok2, TOKEN tok3, TOKEN tok4, TOKEN tok5){
+	convert(tok1, PROGRAMOP);		//fix this garbage
+	link(tok1, tok2);
+	tok2->link = makeprogn(tok4, tok3);
+	tok4->link = tok5;
+	tok3->operands = tok5;
+	parseresult = tok1;
+	return tok1;
+}
 
 /* instvars will install variables in symbol table.
    typetok is a token containing symbol table pointer for type. */
 void  instvars(TOKEN idlist, TOKEN typetok){
-	printf("installing variables\n");
 	SYMBOL sym, typesym; int align;
 	//typesym = typetok->symtype;				//this doesnt work but was provided in class notes. 
 	typesym = searchst(typetok->stringval);		//this works though...
-	printf("typesym = %d\n", typesym);
 	align = alignsize(typesym);
-	printf("here\n");
 	//for each id
 	while(idlist != NULL){ 		
 		sym = insertsym(idlist->stringval);
