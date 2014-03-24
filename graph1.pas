@@ -8,6 +8,26 @@ const d = 0.0625; {1/16, 16 lines for interval [x,x+1]}
 var x,y : real;  i,n : integer;
 begin
    for i := 0 to lim do
+      begin 
+		x := d*i; y := exp(x)*sin(c*x);
+		n := round(s*y) + h;
+		{repeat write(' ');  n := n-1
+		until n=0;}
+      writeln('*')
+   end
+end.
+
+
+{
+
+program graph1(output);
+const d = 0.0625; 
+      s = 32; 
+      h = 34; 
+      c = 6.28318;   lim = 32;
+var x,y : real;  i,n : integer;
+begin
+   for i := 0 to lim do
       begin x := d*i; y := exp(-x)*sin(c*x);
       n := round(s*y) + h;
       repeat write(' ');  n := n-1
@@ -15,3 +35,4 @@ begin
       writeln('*')
    end
 end.
+}

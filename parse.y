@@ -81,12 +81,18 @@ TOKEN parseresult;
   program    :  PROGRAM IDENTIFIER LPAREN IDENTIFIER RPAREN SEMICOLON block DOT    { parseresult = processProgram($1, $2, $4, $5, $7);}
              ;
 			 
-	block	: vblock					
+	block	: cblock	
+			| vblock
 			| statement						
 			;
 			 
 	vblock	: VAR varspecs block				{$$ = $3;}
 			;
+			
+	cblock	: CONST eqspec block {$$ = $3;}
+	
+	eqspec 	: IDENTIFIER EQ expr SEMICOLON eqspec {instconst($1, $3);}
+			| IDENTIFIER EQ expr SEMICOLON		{instconst($1, $3);}
 			
 	varspecs: vargroup SEMICOLON varspecs
 			| vargroup SEMICOLON
@@ -106,14 +112,20 @@ TOKEN parseresult;
   statement  :  BEGINBEGIN statement endpart
 													{ $$ = makeprogn($1,cons($2, $3)); }
              |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
-             |  assignment
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
+			 | REPEAT repeatTerms UNTIL statement		{ $$ = $4;}
+			 | assignment
+			 | expr
 	         | IDENTIFIER LPAREN STRING RPAREN		
 			 { 
 				//change rule above. only accepts strings right now
 				$$ = makefuncall($2, $1, $3);
 			 }
              ;
+			 
+repeatTerms : statement SEMICOLON repeatTerms { $$ = cons($1, $3);}
+			| statement
+			;
 			 
   endpart    :  SEMICOLON statement endpart    { $$ = cons($2, $3); }
              |  END                            { $$ = NULL; }
@@ -126,15 +138,20 @@ TOKEN parseresult;
   assignment :  IDENTIFIER ASSIGN expr         { $$ = binop($2, $1, $3); }
              ;
   expr       :  expr PLUS term                 { $$ = binop($2, $1, $3); }
+			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
+  			 | STRING
              |  term 
+			 | factor
              ;
 			 
   term       :  term TIMES factor              { $$ = binop($2, $1, $3); }
-             |  factor
+             |  factor TIMES factor
+			 |  factor
              ;
 			 
   factor     :  LPAREN expr RPAREN             { $$ = $2; }
-             |  IDENTIFIER
+             |  IDENTIFIER LPAREN expr RPAREN { $$ = makefuncall($2, $1, $3);}
+			 |  IDENTIFIER
              |  NUMBER
              ;
 
@@ -156,6 +173,40 @@ TOKEN parseresult;
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+ /* makerepeat makes structures for a repeat statement.
+   tok and tokb are (now) unused tokens that are recycled. */
+TOKEN makerepeat(TOKEN tok, TOKEN statements, TOKEN tokb, TOKEN expr){
+	printf("making repeat\n");
+	return statements;
+}
+ 
+/* instconst installs a constant in the symbol table */
+void  instconst(TOKEN idtok, TOKEN consttok){
+	SYMBOL sym, typesym; int align;
+	//typesym = consttok->symtype;				//this doesnt work but was provided in class notes. 
+	if(consttok->datatype == 1){
+		typesym = searchst("real");		//this works though...
+	}
+	else if(consttok->datatype == 0){
+		typesym = searchst("integer");
+	}
+	printsymbol(typesym);
+	align = alignsize(typesym);
+	printf("align = %d\n", align);
+	
+	sym = insertsym(idtok->stringval);
+	sym->kind = CONSTSYM;
+	sym->offset = wordaddress(blockoffs[blocknumber], align);
+	sym->size = typesym->size;
+	blockoffs[blocknumber] = sym->offset + sym->size;
+	sym->datatype = typesym;
+	sym->basicdt = typesym->basicdt;
+	if(consttok->datatype == 0)
+		sym->constval.intnum = consttok->intval;
+	else if(consttok->datatype == 1)
+		sym->constval.realnum = consttok->realval;
+}
+ 
    /*  Note: you should add to the above values and insert debugging
        printouts in your routines similar to those that are shown here.     */
 	   

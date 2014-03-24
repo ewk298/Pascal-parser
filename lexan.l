@@ -63,7 +63,7 @@ number	 {digit}*
 fnumber  {digit}+(\.{digit}+)?((E|e)?[+\-]?{digit}+)?
 comm1  	 "{"
 comm2    "(*"
-string	 '(.*?)'
+string	 '(\\.|[^'])*'
 %%
 
 {ws}      	{ /* no action and no return */ }
