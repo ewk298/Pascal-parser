@@ -139,19 +139,22 @@ repeatTerms : statement SEMICOLON repeatTerms { $$ = cons($1, $3);}
              ;
   expr       :  expr PLUS term                 { $$ = binop($2, $1, $3); }
 			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
+			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
+			 | MINUS factor						{$$ = unaryop($1, $2);}
   			 | STRING
              |  term 
 			 | factor
              ;
 			 
   term       :  term TIMES factor              { $$ = binop($2, $1, $3); }
+		     | term MINUS factor					{$$ = binop($2, $1, $3);}
              |  factor TIMES factor
 			 |  factor
              ;
 			 
   factor     :  LPAREN expr RPAREN             { $$ = $2; }
              |  IDENTIFIER LPAREN expr RPAREN { $$ = makefuncall($2, $1, $3);}
-			 |  IDENTIFIER
+			 |  IDENTIFIER						{$$ = findid($1);/* want to replace constants with actual value here?? */}
              |  NUMBER
              ;
 
@@ -173,6 +176,35 @@ repeatTerms : statement SEMICOLON repeatTerms { $$ = cons($1, $3);}
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+ /* findid finds an identifier in the symbol table, sets up symbol table
+   pointers, changes a constant to its number equivalent */
+TOKEN findid(TOKEN tok){
+	SYMBOL result = searchst(tok->stringval);
+	TOKEN constant_val = copytoken(tok);
+	//if id is in symbol table and 
+	if((result != NULL) && (result->kind == CONSTSYM)){
+		//printf("found constant variable in symbol table. need to replace with actual value\n\n");
+		//printf("token name = %s\n", tok->stringval);
+		constant_val->tokentype = NUMBERTOK;
+		constant_val->datatype = result->basicdt;			//copy datatype
+		//printf("datatype = %d\n", result->basicdt); 
+		//integer
+		if(constant_val->datatype == 0){
+			constant_val->intval = result->constval.intnum;
+			//printf("constant_value = %d\n\n", constant_val->intval);
+		}
+		//real
+		else if(constant_val->datatype == 1){
+			constant_val->realval = result->constval.realnum;
+			//printf("constant_value = %f\n\n", constant_val->realval);
+		}
+		return constant_val;
+	}
+	return tok;
+	
+
+}
+ 
  /* makerepeat makes structures for a repeat statement.
    tok and tokb are (now) unused tokens that are recycled. */
 TOKEN makerepeat(TOKEN tok, TOKEN statements, TOKEN tokb, TOKEN expr){
@@ -263,7 +295,8 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 	func->datatype = STRINGTYPE;
 	func->whichval = FUNCALLOP;
 	func->link = NULL;
-	cons(fn, args);
+	//cons(fn, args);
+	fn->link = args;
 	func->operands = fn;
 	return func;
 }
@@ -301,6 +334,7 @@ TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
 	unaryop(ifop, lteop);
 	//add operands to LEOP
 	TOKEN i = copytoken(asg->operands);
+	
 	binop(lteop, i, endexpr);
 	//connect progn to LEOP
 	TOKEN newProgn = makeprogn(copytoken(i), statement);
@@ -363,6 +397,32 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
   { op->operands = lhs;          /* link operands to operator       */
     lhs->link = rhs;             /* link second operand to first    */
     rhs->link = NULL;            /* terminate operand list          */
+	TOKEN op_copy = copytoken(op);
+	//getting type of second argument
+	SYMBOL second = searchst(rhs->stringval);
+	if(second != NULL)
+		printf("rhs datatype = %d\n\n", second->basicdt);
+	
+	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE)){
+		/* printf("\n\noperator = %d\nDatatypes don't match in binop.\n", op->whichval);
+		printf("lhs datatype = %d, rhs datatype = %d\n", lhs->datatype, rhs->datatype);
+		printf("lhs tokentype = %d, rhs tokentype = %d\n\n", lhs->tokentype, rhs->tokentype); */
+		
+		if(lhs->datatype == 0)
+			printf("\n\nlhs value = %d\n", lhs->intval);
+		else if(lhs->datatype == 1)
+			printf("\n\nlhs value = %f\n", lhs->realval);
+		
+		
+		if(lhs->datatype == INTEGER)
+			op_copy->whichval = FIXOP;
+		else if(lhs->datatype == REAL)
+			op_copy->whichval = FLOATOP;
+		op_copy->operands = rhs;
+		lhs->link = op_copy;
+		op_copy->link = NULL;
+	}
+	
     if (DEBUG & DB_BINOP)
        { printf("binop\n");
          dbugprinttok(op);
