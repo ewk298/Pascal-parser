@@ -298,6 +298,28 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 	//cons(fn, args);
 	fn->link = args;
 	func->operands = fn;
+	
+	//search symbol table for function. Need to check if arguments need to be coerced
+	SYMBOL func_symbol = searchst(fn->stringval);
+	int return_type = func_symbol->datatype->basicdt;
+	int arg_type = func_symbol->datatype->link->basicdt;
+	printf("\n\nfunction name is %s\n", fn->stringval);
+	printf("function return type = %d\n", return_type);
+	printf("function argument type = %d\n\n", arg_type);
+	
+	TOKEN coercion_op = copytoken(func);
+	//coerce to integer
+	if(arg_type == 0){
+		//coercion_op->whichval = FIXOP;
+	}
+	//coerce to float
+	else if(arg_type == 1){
+		//coercion_op->whichval = FLOATOP;
+	}
+	coercion_op->operands = args;
+	fn->link = coercion_op;
+	
+	
 	return func;
 }
 
@@ -403,6 +425,7 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 	if(second != NULL)
 		printf("rhs datatype = %d\n\n", second->basicdt);
 	
+	//need to coerce integer to float.
 	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE)){
 		/* printf("\n\noperator = %d\nDatatypes don't match in binop.\n", op->whichval);
 		printf("lhs datatype = %d, rhs datatype = %d\n", lhs->datatype, rhs->datatype);
@@ -418,6 +441,8 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 			op_copy->whichval = FIXOP;
 		else if(lhs->datatype == REAL)
 			op_copy->whichval = FLOATOP;
+			
+			
 		op_copy->operands = rhs;
 		lhs->link = op_copy;
 		op_copy->link = NULL;

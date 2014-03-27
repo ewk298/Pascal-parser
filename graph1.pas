@@ -10,7 +10,7 @@ begin
    for i := 0 to lim do
       begin 
 		x := d*i; y := exp(-x)*sin(c*x);
-		n := round(s*y) + h; 
+		n := iround(s*y) + h; 
 		{repeat write(' ');  n := n-1
 		until n=0;}
       writeln('*')
