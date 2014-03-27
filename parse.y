@@ -307,7 +307,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 	printf("function return type = %d\n", return_type);
 	printf("function argument type = %d\n\n", arg_type);
 	
-	TOKEN coercion_op = copytoken(func);
+	/* TOKEN coercion_op = copytoken(func);
 	//coerce to integer
 	if(arg_type == 0){
 		//coercion_op->whichval = FIXOP;
@@ -317,7 +317,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 		//coercion_op->whichval = FLOATOP;
 	}
 	coercion_op->operands = args;
-	fn->link = coercion_op;
+	fn->link = coercion_op; */
 	
 	
 	return func;
@@ -431,21 +431,27 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 		printf("lhs datatype = %d, rhs datatype = %d\n", lhs->datatype, rhs->datatype);
 		printf("lhs tokentype = %d, rhs tokentype = %d\n\n", lhs->tokentype, rhs->tokentype); */
 		
-		if(lhs->datatype == 0)
+		/* if(lhs->datatype == 0)
 			printf("\n\nlhs value = %d\n", lhs->intval);
 		else if(lhs->datatype == 1)
-			printf("\n\nlhs value = %f\n", lhs->realval);
+			printf("\n\nlhs value = %f\n", lhs->realval); */
 		
-		
-		if(lhs->datatype == INTEGER)
-			op_copy->whichval = FIXOP;
-		else if(lhs->datatype == REAL)
+		//coerce lhs to float
+		if(lhs->datatype == INTEGER){
 			op_copy->whichval = FLOATOP;
+			op_copy->operands = lhs;
+			lhs->link = NULL;
+			op_copy->link = rhs;
+			op->operands = op_copy;
 			
-			
-		op_copy->operands = rhs;
-		lhs->link = op_copy;
-		op_copy->link = NULL;
+		}
+		//coerce rhs to float
+		else if(rhs->datatype == INTEGER){
+			op_copy->whichval = FLOATOP;
+			op_copy->operands = rhs;
+			op_copy->link = NULL;
+			lhs->link = op_copy;
+		}
 	}
 	
     if (DEBUG & DB_BINOP)
