@@ -113,7 +113,7 @@ TOKEN parseresult;
 													{ $$ = makeprogn($1,cons($2, $3)); }
              |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
-			 | REPEAT repeatTerms UNTIL statement		{ $$ = $4;}
+			 | REPEAT repeatTerms UNTIL statement		{$$ = $2;}
 			 | assignment
 			 | expr
 	         | IDENTIFIER LPAREN STRING RPAREN		
@@ -142,6 +142,7 @@ repeatTerms : statement SEMICOLON repeatTerms { $$ = cons($1, $3);}
 			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
 			 | MINUS factor						{$$ = unaryop($1, $2);}
   			 | STRING
+			 | IDENTIFIER EQ expr
              |  term 
 			 | factor
              ;

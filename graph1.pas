@@ -11,8 +11,8 @@ begin
       begin 
 		x := d*i; y := exp(-x)*sin(c*x);
 		n := iround(s*y) + h; 
-		{repeat write(' ');  n := n-1
-		until n=0;}
+		repeat write(' '); n := n-1
+		until n=0;
       writeln('*')
    end
 end.
