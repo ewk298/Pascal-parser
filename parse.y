@@ -113,7 +113,7 @@ TOKEN parseresult;
 													{ $$ = makeprogn($1,cons($2, $3)); }
              |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
-			 | REPEAT repeatTerms UNTIL statement		{$$ = $2;}
+			 | REPEAT repeatTerms UNTIL statement		{$$ = makerepeat($1, $2, $3, $4);}
 			 | assignment
 			 | expr
 	         | IDENTIFIER LPAREN STRING RPAREN		
@@ -142,7 +142,7 @@ repeatTerms : statement SEMICOLON repeatTerms { $$ = cons($1, $3);}
 			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
 			 | MINUS factor						{$$ = unaryop($1, $2);}
   			 | STRING
-			 | IDENTIFIER EQ expr
+			 | IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
              |  term 
 			 | factor
              ;
@@ -209,8 +209,51 @@ TOKEN findid(TOKEN tok){
  /* makerepeat makes structures for a repeat statement.
    tok and tokb are (now) unused tokens that are recycled. */
 TOKEN makerepeat(TOKEN tok, TOKEN statements, TOKEN tokb, TOKEN expr){
-	printf("making repeat\n");
-	return statements;
+	TOKEN copy_tok = copytoken(tok);
+	//creating label operator token
+	convert(tokb, LABELOP);			//make a new number for the label. use unaryop??
+	makeprogn(copy_tok, tokb);
+	//creating number for label
+	TOKEN new = talloc();			//use this for number of label??
+	new->tokentype = NUMBERTOK;
+	new->datatype = INTEGER;
+	new->intval = labelnumber++;
+	//connecting label to its number
+	unaryop(tokb, new);
+	
+	//linking label to statements
+	tokb->link = statements;
+	
+	TOKEN if_copy = copytoken(tokb);
+	if_copy->whichval = IFOP;
+	if_copy->operands = expr;
+	if_copy->link = NULL;
+	TOKEN link_pointer = statements->link;
+	while(link_pointer->link != NULL)
+		link_pointer = link_pointer->link;
+	link_pointer->link = if_copy;
+	
+	//attach progn to expr
+	expr->link = makeprogn(copytoken(tok), NULL);
+	
+	//create goto
+	TOKEN gotok = copytoken(if_copy);
+	gotok->whichval = GOTOOP;
+	gotok->link = NULL;
+	TOKEN label_num = copytoken(new);
+	//label_num->intval = new->intval;
+	label_num->link = NULL;
+	label_num->operands = NULL;
+	gotok->operands = label_num;
+	
+	//connect progn to goto
+	expr->link->link = gotok;
+	
+
+	
+	
+
+	return copy_tok;
 }
  
 /* instconst installs a constant in the symbol table */
@@ -382,7 +425,7 @@ TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
 	gotok->whichval = GOTOOP;
 	gotok->link = NULL;
 	TOKEN zero = copytoken(one);
-	zero->intval = 0;
+	//zero->intval = 0;
 	zero->link = NULL;
 	zero->operands = NULL;
 	gotok->operands = zero;
