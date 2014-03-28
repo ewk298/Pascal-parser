@@ -113,19 +113,18 @@ TOKEN parseresult;
 													{ $$ = makeprogn($1,cons($2, $3)); }
              |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
-			 | REPEAT repeatTerms UNTIL statement		{$$ = makerepeat($1, $2, $3, $4);}
-			 | assignment
-			 | expr
-	         | IDENTIFIER LPAREN STRING RPAREN		
-			 { 
-				//change rule above. only accepts strings right now
-				$$ = makefuncall($2, $1, $3);
-			 }
+			 | REPEAT repeatTerms UNTIL expr		{$$ = makerepeat($1, $2, $3, $4);}
+			 | exprORassign
+	         
              ;
 			 
-repeatTerms : statement SEMICOLON repeatTerms { $$ = cons($1, $3);}
-			| statement
+repeatTerms : exprORassign SEMICOLON repeatTerms { $$ = cons($1, $3);}
+			| exprORassign
 			;
+			
+exprORassign : expr
+			 | assignment
+		     ;
 			 
   endpart    :  SEMICOLON statement endpart    { $$ = cons($2, $3); }
              |  END                            { $$ = NULL; }
@@ -137,12 +136,12 @@ repeatTerms : statement SEMICOLON repeatTerms { $$ = cons($1, $3);}
 			 
   assignment :  IDENTIFIER ASSIGN expr         { $$ = binop($2, $1, $3); }
              ;
-  expr       :  expr PLUS term                 { $$ = binop($2, $1, $3); }
+  expr       :   IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
+			 | expr PLUS term                 { $$ = binop($2, $1, $3); }
 			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
-			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
 			 | MINUS factor						{$$ = unaryop($1, $2);}
-  			 | STRING
-			 | IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
+			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
+			 | STRING
              |  term 
 			 | factor
              ;
@@ -350,20 +349,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 	printf("\n\nfunction name is %s\n", fn->stringval);
 	printf("function return type = %d\n", return_type);
 	printf("function argument type = %d\n\n", arg_type);
-	
-	/* TOKEN coercion_op = copytoken(func);
-	//coerce to integer
-	if(arg_type == 0){
-		//coercion_op->whichval = FIXOP;
-	}
-	//coerce to float
-	else if(arg_type == 1){
-		//coercion_op->whichval = FLOATOP;
-	}
-	coercion_op->operands = args;
-	fn->link = coercion_op; */
-	
-	
+
 	return func;
 }
 
@@ -418,14 +404,21 @@ TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
 	one->intval = 1;
 	binop(plusop, copytoken(i), one);
 	binop(assignop, copytoken(i), plusop);
-	cons(statement, assignop);
+	
+	statement->link = assignop;
+	/* TOKEN pointer = statement->link->operands;
+	//skip progn and attach incrementation to end of arguments
+	while(pointer->link != NULL)
+		pointer = pointer->link;
+	pointer->link = assignop; */
+	
 	
 	//create goto
 	TOKEN gotok = copytoken(plusop);
 	gotok->whichval = GOTOOP;
 	gotok->link = NULL;
 	TOKEN zero = copytoken(one);
-	//zero->intval = 0;
+	zero->intval = labelnumber-1;
 	zero->link = NULL;
 	zero->operands = NULL;
 	gotok->operands = zero;
@@ -471,15 +464,6 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 	
 	//need to coerce integer to float.
 	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE)){
-		/* printf("\n\noperator = %d\nDatatypes don't match in binop.\n", op->whichval);
-		printf("lhs datatype = %d, rhs datatype = %d\n", lhs->datatype, rhs->datatype);
-		printf("lhs tokentype = %d, rhs tokentype = %d\n\n", lhs->tokentype, rhs->tokentype); */
-		
-		/* if(lhs->datatype == 0)
-			printf("\n\nlhs value = %d\n", lhs->intval);
-		else if(lhs->datatype == 1)
-			printf("\n\nlhs value = %f\n", lhs->realval); */
-		
 		//coerce lhs to float
 		if(lhs->datatype == INTEGER){
 			op_copy->whichval = FLOATOP;
