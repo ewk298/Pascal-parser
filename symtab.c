@@ -44,7 +44,6 @@
 #include "symtab.h"
 #include "token.h"
 
-
 /* BASEOFFSET is the offset for the first variable */
 #define BASEOFFSET 0
 

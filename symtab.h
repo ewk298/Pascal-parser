@@ -52,6 +52,10 @@
 #define POINTER    4
     */
 
+//label table
+#define MAXLABELS 50
+int labels[MAXLABELS];
+	
 #define PPSYMDEBUG 0
 
 #define MAXBLOCKS 50          /* Max number of program blocks           */

@@ -83,7 +83,24 @@ TOKEN parseresult;
 			 
 	block	: cblock	
 			| vblock
+			| pblock
+			| tblock
 			| statement						
+			;
+			
+	tblock 	: TYPE tspec block {$$ = $3;}
+			;
+			
+	tspec   : IDENTIFIER EQ type SEMICOLON tspec 	{insttype($1, $3);}
+			| IDENTIFIER EQ type SEMICOLON	{insttype($1, $3);}
+			;
+			
+			
+	pblock  : LABEL numberlist SEMICOLON block {$$ = $4;}
+			;
+	
+ numberlist : NUMBER COMMA numberlist 			{instlabel($1);}
+			| NUMBER							{instlabel($1);}
 			;
 			 
 	vblock	: VAR varspecs block				{$$ = $3;}
@@ -167,7 +184,7 @@ exprORassign : expr
    are working.
   */
 
-#define DEBUG        31             /* set bits here for debugging, 0 = off  */
+#define DEBUG        0             /* set bits here for debugging, 0 = off  */  //default 31
 #define DB_CONS       1             /* bit to trace cons */
 #define DB_BINOP      2             /* bit to trace binop */
 #define DB_MAKEIF     4             /* bit to trace makeif */
@@ -176,6 +193,24 @@ exprORassign : expr
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+ /* insttype will install a type name in symbol table.
+   typetok is a token containing symbol table pointers. */
+void  insttype(TOKEN typename, TOKEN typetok){
+	printf("installing type...\n");
+}
+ 
+ /* instlabel installs a user label into the label table */
+void  instlabel (TOKEN num){
+	printf("installing label...\n");
+	//install into label table. Index into table is the internal label
+	labels[labelnumber++] = num->intval;
+	int i = 0;
+	for(; i < labelnumber; i++){
+		printf("%d\n", labels[i]);
+	}
+	
+}
+ 
  /* findid finds an identifier in the symbol table, sets up symbol table
    pointers, changes a constant to its number equivalent */
 TOKEN findid(TOKEN tok){
