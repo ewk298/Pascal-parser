@@ -110,6 +110,7 @@ TOKEN parseresult;
 	
 	eqspec 	: IDENTIFIER EQ expr SEMICOLON eqspec {instconst($1, $3);}
 			| IDENTIFIER EQ expr SEMICOLON		{instconst($1, $3);}
+			;
 			
 	varspecs: vargroup SEMICOLON varspecs
 			| vargroup SEMICOLON
@@ -118,13 +119,20 @@ TOKEN parseresult;
 	vargroup: idlist COLON type 				{instvars($1, $3);}
 			 
 	type	: simpletype						{$$ = $1;}
+			| RECORD fieldlist END				{$$ = instrec($1, $2);}
+			| POINT IDENTIFIER					{/*make sure this is a type identifier*/}
+			;
+	
+fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc($1, $3);}
+			| idlist COLON type						{$$ = nconc($1, $3);}
 			;
 			
 	idlist  : IDENTIFIER COMMA idlist 			{$$ = cons($1, $3);}
 			| IDENTIFIER 						{$$ = cons($1, NULL);}
 			;
 			
-	simpletype: IDENTIFIER						{/*$$ = findtype($1);*/}
+	simpletype: IDENTIFIER						{$$ = findtype($1);}
+			| LPAREN idlist RPAREN				{instenum($2); $$ = $2;}
 			;
   statement  :  BEGINBEGIN statement endpart
 													{ $$ = makeprogn($1,cons($2, $3)); }
@@ -193,10 +201,79 @@ exprORassign : expr
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+ /* instenum installs an enumerated subrange in the symbol table,
+   e.g., type color = (red, white, blue)
+   by calling makesubrange and returning the token it returns. */
+TOKEN instenum(TOKEN idlist){
+	printf("installing enum into symbol table...\n");
+}
+ 
+ /* instrec will install a record definition.  Each token in the linked list
+   argstok has a pointer its type. (right now im appending the type to the end of argstok list) */
+TOKEN instrec(TOKEN rectok, TOKEN argstok){
+	SYMBOL temptable[50];								//hold the symbols temporarily
+	SYMBOL sym, typesym; int align;
+	TOKEN typetok;
+	printf("\n");
+	printf("installing record into symbol table...\n");
+	SYMBOL record = makesym("");
+	record->kind = RECORDSYM;
+	printf("%s, datatype = %d\n", argstok->stringval, argstok->datatype);
+	TOKEN temp = argstok;
+	while(temp){
+		printf("%s\n", temp->stringval);
+		if(!temp->link)
+			typetok = temp;
+		temp = temp->link;
+		
+	}
+	
+	typesym = searchst(typetok->stringval);
+	printf("%s\n", typesym->namestring);
+	align = alignsize(typesym);
+	int index = 0;
+	//for each id
+	while(argstok != typetok){ 		
+		sym = makesym(argstok->stringval);
+		printf("%s\n", sym->namestring);
+		sym->offset = wordaddress(blockoffs[blocknumber], align);
+		sym->size = typesym->size;
+		blockoffs[blocknumber] = sym->offset + sym->size;
+		sym->datatype = typesym;
+		sym->basicdt = typesym->basicdt;
+		temptable[index] = sym;
+		argstok = argstok->link;
+		index++;
+	}
+	
+	//link recordsym to its fields as symbols
+	record->datatype = temptable[0];
+	printf("RECORDSYM points to %s\n", record->datatype->namestring);
+	
+	printf("printing temp table...\n");
+	int i = 0;
+	for(; i < index; i++){
+		SYMBOL tempss = temptable[i];
+		printf("NAME: %s, DATATYPE: %s, OFFSET: %d, SIZE: %d\n", tempss->namestring, tempss->datatype->namestring, tempss->offset, tempss->size);
+	}
+	printf("\n");
+	
+	printf("\n");
+	return rectok;
+}
+
+/* instfields will install type in a list idlist of field name tokens:
+   re, im: real    put the pointer to REAL in the RE, IM tokens.
+   typetok is a token whose symtype is a symbol table pointer.
+   Note that nconc() can be used to combine these lists after instrec() */
+TOKEN instfields(TOKEN idlist, TOKEN typetok){
+	
+}
+ 
  /* insttype will install a type name in symbol table.
    typetok is a token containing symbol table pointers. */
 void  insttype(TOKEN typename, TOKEN typetok){
-	printf("installing type...\n");
+	printf("installing %s into symbol table...\n", typename->stringval);
 }
  
  /* instlabel installs a user label into the label table */
@@ -208,7 +285,17 @@ void  instlabel (TOKEN num){
 	for(; i < labelnumber; i++){
 		printf("%d\n", labels[i]);
 	}
-	
+}
+
+/* findtype looks up a type name in the symbol table, puts the pointer
+   to its type into tok->symtype, returns tok. */
+TOKEN findtype(TOKEN tok){
+	printf("linking %s to it's type...\n", tok->stringval);
+	SYMBOL stype = searchst(tok->stringval);
+	tok->symtype = stype;
+	//if stype is null then the type isn't a basic type or it hasn't been entered into symbol table yet
+	//printf("%s\n", tok->symtype->namestring);
+	return tok;
 }
  
  /* findid finds an identifier in the symbol table, sets up symbol table
@@ -283,10 +370,6 @@ TOKEN makerepeat(TOKEN tok, TOKEN statements, TOKEN tokb, TOKEN expr){
 	//connect progn to goto
 	expr->link->link = gotok;
 	
-
-	
-	
-
 	return copy_tok;
 }
  
@@ -475,6 +558,20 @@ TOKEN convert(TOKEN tok, int opnum){
 	tok->tokentype = OPERATOR;
 	tok->whichval = opnum;
 	return tok;
+}
+
+/* nconc concatenates two token lists, destructively, by making the last link
+   of lista point to listb.
+   (nconc '(a b) '(c d e))  =  (a b c d e)  */
+/* nconc is useful for putting together two fieldlist groups to
+   make them into a single list in a record declaration. */
+TOKEN nconc(TOKEN lista, TOKEN listb){
+	TOKEN temp = lista;
+	while(temp->link)
+		temp = temp->link;
+	temp->link = listb;
+	return lista;
+	
 }
 	   
 TOKEN cons(TOKEN item, TOKEN list)           /* add item to front of list */
