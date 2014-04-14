@@ -107,6 +107,7 @@ TOKEN parseresult;
 			;
 			
 	cblock	: CONST eqspec block {$$ = $3;}
+			;
 	
 	eqspec 	: IDENTIFIER EQ expr SEMICOLON eqspec {instconst($1, $3);}
 			| IDENTIFIER EQ expr SEMICOLON		{instconst($1, $3);}
@@ -205,7 +206,7 @@ exprORassign : expr
 TOKEN instpoint(TOKEN tok, TOKEN typename){
 	printf("installing pointer...\n");
 	printf("%s\n", typename->stringval);
-	SYMBOL temp = makesym("person");
+	SYMBOL temp = makesym(typename->stringval);
 	temp->kind = TYPESYM;
 	
 	

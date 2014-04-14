@@ -58,7 +58,8 @@ label 1492, 1776;
 type complex = record re, im: real end;
      color = (red, white, blue);
 	 pp = ^ person;
-	 perplex = record re, im: real end;
+	 
+	 
 	 
 begin
    for i := 0 to lim do
