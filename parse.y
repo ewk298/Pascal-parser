@@ -120,11 +120,11 @@ TOKEN parseresult;
 			 
 	type	: simpletype						{$$ = $1;}
 			| RECORD fieldlist END				{$$ = instrec($1, $2);}
-			| POINT IDENTIFIER					{/*make sure this is a type identifier*/}
+			| POINT IDENTIFIER					{$$ = instpoint($1, $2);}
 			;
 	
-fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc($1, $3);}
-			| idlist COLON type						{$$ = nconc($1, $3);}
+fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3), $5);}
+			| idlist COLON type						{instfields($1, $3);}
 			;
 			
 	idlist  : IDENTIFIER COMMA idlist 			{$$ = cons($1, $3);}
@@ -132,7 +132,7 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc($1, $3);}
 			;
 			
 	simpletype: IDENTIFIER						{$$ = findtype($1);}
-			| LPAREN idlist RPAREN				{instenum($2); $$ = $2;}
+			| LPAREN idlist RPAREN				{$$ = instenum($2);}
 			;
   statement  :  BEGINBEGIN statement endpart
 													{ $$ = makeprogn($1,cons($2, $3)); }
@@ -201,64 +201,117 @@ exprORassign : expr
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+ /* instpoint will install a pointer type in symbol table */
+TOKEN instpoint(TOKEN tok, TOKEN typename){
+	printf("installing pointer...\n");
+	printf("%s\n", typename->stringval);
+	SYMBOL temp = makesym("person");
+	temp->kind = TYPESYM;
+	
+	
+	SYMBOL pointersym = makesym("");
+	pointersym->kind = POINTERSYM;
+	pointersym->datatype = temp;
+	pointersym->size = basicsizes[POINTER];
+	
+	tok->symtype = pointersym;
+	
+	
+	printf("%d\n", tok->symtype->size);
+	return tok;
+}
+ 
  /* instenum installs an enumerated subrange in the symbol table,
    e.g., type color = (red, white, blue)
    by calling makesubrange and returning the token it returns. */
 TOKEN instenum(TOKEN idlist){
 	printf("installing enum into symbol table...\n");
+	int low = 0, high = 0;
+	TOKEN temp = idlist;
+	while(temp){
+		temp = temp->link;
+		high++;
+	}
+	TOKEN subrange = makesubrange(copytoken(idlist), low, high - 1);
+	int i = 0;
+	temp = idlist;
+	TOKEN number = copytoken(idlist);
+	number->tokentype = NUMBERTOK;
+	number->datatype = INTEGER;
+	//install constant for each value of subrange
+	for(; i < high; i++){
+		number->intval = i;
+		instconst(temp, number);
+		number = copytoken(number);
+		temp = temp->link;
+	}
+	return subrange;
+}
+
+/* makesubrange makes a SUBRANGE symbol table entry, puts the pointer to it
+   into tok, and returns tok. */
+TOKEN makesubrange(TOKEN tok, int low, int high){
+	printf("making subrange from %d to %d...\n", low, high);
+	//put the pointer to the subrange symbol in tok
+	SYMBOL subrange = makesym("subrange");
+	subrange->kind = SUBRANGE;
+	subrange->highbound = high;
+	subrange->lowbound = low;
+	subrange->basicdt = INTEGER;
+	subrange->size = basicsizes[INTEGER];
+	tok->symtype = subrange;
 }
  
  /* instrec will install a record definition.  Each token in the linked list
-   argstok has a pointer its type. (right now im appending the type to the end of argstok list) */
+   argstok has a pointer to its type.*/
 TOKEN instrec(TOKEN rectok, TOKEN argstok){
-	SYMBOL temptable[50];								//hold the symbols temporarily
-	SYMBOL sym, typesym; int align;
-	TOKEN typetok;
-	printf("\n");
 	printf("installing record into symbol table...\n");
-	SYMBOL record = makesym("");
-	record->kind = RECORDSYM;
-	printf("%s, datatype = %d\n", argstok->stringval, argstok->datatype);
+	SYMBOL temptab[50];
 	TOKEN temp = argstok;
 	while(temp){
-		printf("%s\n", temp->stringval);
-		if(!temp->link)
-			typetok = temp;
+		printf("%s: %s, ", temp->stringval, temp->symtype->namestring);
 		temp = temp->link;
-		
 	}
-	
-	typesym = searchst(typetok->stringval);
-	printf("%s\n", typesym->namestring);
+	printf("\n");
+	SYMBOL temptable[50];								//hold the symbols temporarily
+	SYMBOL record = makesym("");
+	record->kind = RECORDSYM;
+	int size = 0;
+	SYMBOL sym, typesym; int align;
+	//accumulate size of each field and store in recordsym
+	temp = argstok;
+	SYMBOL first;
+	typesym = temp->symtype;
 	align = alignsize(typesym);
 	int index = 0;
-	//for each id
-	while(argstok != typetok){ 		
-		sym = makesym(argstok->stringval);
-		printf("%s\n", sym->namestring);
-		sym->offset = wordaddress(blockoffs[blocknumber], align);
-		sym->size = typesym->size;
-		blockoffs[blocknumber] = sym->offset + sym->size;
-		sym->datatype = typesym;
-		sym->basicdt = typesym->basicdt;
-		temptable[index] = sym;
-		argstok = argstok->link;
+	while(temp){
+		sym = makesym(temp->stringval);
+		if(index == 0)
+			first = sym;
+		sym->datatype = temp->symtype;
+		sym->offset += size;
+		sym->size = temp->symtype->size;
+		size += temp->symtype->size;
+		temptab[index] = sym;						//insert so you can link together later
+		temp = temp->link;
+		printf("NAME: %s, DATATYPE: %s, OFFSET: %d, SIZE: %d\n", sym->namestring, sym->datatype->namestring, sym->offset, sym->size);
 		index++;
 	}
 	
-	//link recordsym to its fields as symbols
-	record->datatype = temptable[0];
-	printf("RECORDSYM points to %s\n", record->datatype->namestring);
-	
-	printf("printing temp table...\n");
 	int i = 0;
-	for(; i < index; i++){
-		SYMBOL tempss = temptable[i];
-		printf("NAME: %s, DATATYPE: %s, OFFSET: %d, SIZE: %d\n", tempss->namestring, tempss->datatype->namestring, tempss->offset, tempss->size);
+	for(; i < index - 1; i++){
+		temptab[i]->link = temptab[i+1];
 	}
-	printf("\n");
+	
+	record->datatype = first;
+	record->size = size;
+	
+	printf("KIND: %d, DATATYPE: %s, SIZE: %d\n", record->kind, record->datatype->namestring, record->size);
+	
 	
 	printf("\n");
+	
+	rectok->symtype = record;			//ie. "complex" datatype will point to this RECORDSYM
 	return rectok;
 }
 
@@ -267,13 +320,32 @@ TOKEN instrec(TOKEN rectok, TOKEN argstok){
    typetok is a token whose symtype is a symbol table pointer.
    Note that nconc() can be used to combine these lists after instrec() */
 TOKEN instfields(TOKEN idlist, TOKEN typetok){
+	printf("inside instfields...\n");
+	TOKEN temp = idlist;
+	while(temp){
+		temp->symtype = typetok->symtype;			//connecting each id in list to it's type
+		printf("%s, ", temp->stringval);
+		temp = temp->link;
+	}
+
 	
+	printf("\n%s\n", typetok->symtype->namestring);
+	
+	printf("\n"); 
+	return idlist;
 }
  
  /* insttype will install a type name in symbol table.
    typetok is a token containing symbol table pointers. */
 void  insttype(TOKEN typename, TOKEN typetok){
 	printf("installing %s into symbol table...\n", typename->stringval);
+	//make a symbol for typename. Datatype for sym = typetok->symtype
+	SYMBOL typesym = insertsym(typename->stringval);
+	typesym->kind = TYPESYM;
+	typesym->datatype = typetok->symtype;
+	typesym->size = typetok->symtype->size;
+
+	printf("NAME: %s, DATATYPE KIND: %d, SIZE: %d\n", typesym->namestring, typesym->datatype->kind, typesym->size);
 }
  
  /* instlabel installs a user label into the label table */
@@ -294,7 +366,7 @@ TOKEN findtype(TOKEN tok){
 	SYMBOL stype = searchst(tok->stringval);
 	tok->symtype = stype;
 	//if stype is null then the type isn't a basic type or it hasn't been entered into symbol table yet
-	//printf("%s\n", tok->symtype->namestring);
+	printf("%s\n", tok->symtype->namestring);
 	return tok;
 }
  
@@ -383,7 +455,7 @@ void  instconst(TOKEN idtok, TOKEN consttok){
 	else if(consttok->datatype == 0){
 		typesym = searchst("integer");
 	}
-	printsymbol(typesym);
+	//printsymbol(typesym);
 	align = alignsize(typesym);
 	printf("align = %d\n", align);
 	
