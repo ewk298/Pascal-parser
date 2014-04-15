@@ -67,7 +67,7 @@ type complex = record re, im: real end;
 var c,d: complex; i, sum: integer;
 	ac: array[1..10] of complex;
   aco: array[1..10, color] of color;
-	 
+	people: array[1..20] of person;
 	 
 	 
 begin
