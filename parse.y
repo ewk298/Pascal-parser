@@ -125,7 +125,11 @@ typegroup   : IDENTIFIER EQ type 		{insttype($1, $3);}
 	type	: simpletype						{$$ = $1;}
 			| RECORD fieldlist END				{$$ = instrec($1, $2);}
 			| POINT IDENTIFIER					{$$ = instpoint($1, $2);}
-			| ARRAY LBRACKET simpletype RBRACKET OF type {$$ = instarray($3, $6);}
+			| ARRAY LBRACKET arglist RBRACKET OF type {$$ = instarray($3, $6);}
+			;
+
+	arglist : simpletype COMMA arglist			{$$ = cons($1, $3);}
+			| simpletype
 			;
 	
 fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3), $5);}
@@ -211,7 +215,7 @@ exprORassign : expr
    bounds points to a SUBRANGE symbol table entry.
    The symbol table pointer is returned in token typetok. */
 TOKEN instarray(TOKEN bounds, TOKEN typetok){
-	printf("installing array\n");
+	printf("installing array with bounds %d .. %d\n", bounds->symtype->lowbound, bounds->symtype->highbound);
 	//need to point typetok to the symbol for the type of array
 	SYMBOL array = makesym("array");
 	array->kind = ARRAYSYM;
@@ -219,6 +223,21 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
 	array->highbound = bounds->symtype->highbound;
 	array->lowbound = bounds->symtype->lowbound;
 	
+	//this works for only 2 dimensional arrays right now.
+	TOKEN second_array;
+	if(bounds->link){
+		//create another array for the next dimension
+		printf("creating second array\n");
+		//printf("second bounds are %d .. %d\n", bounds->link->symtype->datatype->lowbound, bounds->link->symtype->datatype->highbound);
+		//these are the correct bounds
+		int high = bounds->link->symtype->datatype->highbound;
+		int low = bounds->link->symtype->datatype->lowbound;
+		printf("new high: %d, new low: %d\n", high, low);
+		TOKEN subrange = makesubrange(copytoken(typetok), low, high);
+		second_array = instarray(subrange, typetok);
+		array->datatype = second_array->symtype;
+	}
+
 	typetok->symtype = array;
 	return typetok;
 }
@@ -393,6 +412,7 @@ TOKEN findtype(TOKEN tok){
 	tok->symtype = stype;
 	//if stype is null then the type isn't a basic type or it hasn't been entered into symbol table yet
 	printf("%s\n", tok->symtype->namestring);
+	printf("high: %d, low: %d\n", stype->highbound, stype->lowbound);
 	return tok;
 }
  
