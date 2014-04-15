@@ -215,6 +215,8 @@ exprORassign : expr
    bounds points to a SUBRANGE symbol table entry.
    The symbol table pointer is returned in token typetok. */
 TOKEN instarray(TOKEN bounds, TOKEN typetok){
+	
+
 	printf("installing array with bounds %d .. %d\n", bounds->symtype->lowbound, bounds->symtype->highbound);
 	//need to point typetok to the symbol for the type of array
 	SYMBOL array = makesym("array");
@@ -222,8 +224,11 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
 	array->datatype = typetok->symtype;
 	array->highbound = bounds->symtype->highbound;
 	array->lowbound = bounds->symtype->lowbound;
-	
-	//this works for only 2 dimensional arrays right now.
+	int size = array->datatype->size * (array->highbound - array->lowbound + 1);
+	printf("array size = %d\n", size);
+	array->size = size;
+
+	//this works for only 2 dimensional arrays right now. DO inner arrays first!!!
 	TOKEN second_array;
 	if(bounds->link){
 		//create another array for the next dimension
@@ -236,7 +241,13 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
 		TOKEN subrange = makesubrange(copytoken(typetok), low, high);
 		second_array = instarray(subrange, typetok);
 		array->datatype = second_array->symtype;
+		//update size
+		array->size = array->datatype->size * (array->highbound - array->lowbound + 1);
 	}
+	
+	
+	
+	
 
 	typetok->symtype = array;
 	return typetok;
