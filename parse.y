@@ -91,9 +91,11 @@ TOKEN parseresult;
 	tblock 	: TYPE tspec block {$$ = $3;}
 			;
 			
-	tspec   : IDENTIFIER EQ type SEMICOLON tspec 	{insttype($1, $3);}
-			| IDENTIFIER EQ type SEMICOLON	{insttype($1, $3);}
+	tspec   : typegroup SEMICOLON tspec 	
+			| typegroup SEMICOLON	
 			;
+			
+typegroup   : IDENTIFIER EQ type 		{insttype($1, $3);}
 			
 			
 	pblock  : LABEL numberlist SEMICOLON block {$$ = $4;}
@@ -118,10 +120,12 @@ TOKEN parseresult;
 			;
 			
 	vargroup: idlist COLON type 				{instvars($1, $3);}
+			;
 			 
 	type	: simpletype						{$$ = $1;}
 			| RECORD fieldlist END				{$$ = instrec($1, $2);}
 			| POINT IDENTIFIER					{$$ = instpoint($1, $2);}
+			| ARRAY LBRACKET simpletype RBRACKET OF type {$$ = instarray($3, $6);}
 			;
 	
 fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3), $5);}
@@ -134,6 +138,7 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3)
 			
 	simpletype: IDENTIFIER						{$$ = findtype($1);}
 			| LPAREN idlist RPAREN				{$$ = instenum($2);}
+			| NUMBER DOTDOT NUMBER				{$$ = makesubrange($2, $1->intval, $3->intval);}
 			;
   statement  :  BEGINBEGIN statement endpart
 													{ $$ = makeprogn($1,cons($2, $3)); }
@@ -202,6 +207,15 @@ exprORassign : expr
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+ /* instarray installs an array declaration into the symbol table.
+   bounds points to a SUBRANGE symbol table entry.
+   The symbol table pointer is returned in token typetok. */
+TOKEN instarray(TOKEN bounds, TOKEN typetok){
+	printf("installing array\n");
+	//need to point typetok to the symbol for the type of array
+	return typetok;
+}
+ 
  /* instpoint will install a pointer type in symbol table */
 TOKEN instpoint(TOKEN tok, TOKEN typename){
 	printf("installing pointer...\n");
@@ -292,6 +306,10 @@ TOKEN instrec(TOKEN rectok, TOKEN argstok){
 		sym->datatype = temp->symtype;
 		sym->offset += size;
 		sym->size = temp->symtype->size;
+		//add padding
+		if((size % 8 != 0) && (temp->symtype->size == 8)){
+			size += 4;
+		}		
 		size += temp->symtype->size;
 		temptab[index] = sym;						//insert so you can link together later
 		temp = temp->link;
@@ -462,9 +480,9 @@ void  instconst(TOKEN idtok, TOKEN consttok){
 	
 	sym = insertsym(idtok->stringval);
 	sym->kind = CONSTSYM;
-	sym->offset = wordaddress(blockoffs[blocknumber], align);
+	//sym->offset = wordaddress(blockoffs[blocknumber], align);
 	sym->size = typesym->size;
-	blockoffs[blocknumber] = sym->offset + sym->size;
+	//blockoffs[blocknumber] = sym->offset + sym->size;
 	sym->datatype = typesym;
 	sym->basicdt = typesym->basicdt;
 	if(consttok->datatype == 0)
@@ -490,9 +508,13 @@ TOKEN processProgram(TOKEN tok1, TOKEN tok2, TOKEN tok3, TOKEN tok4, TOKEN tok5)
 /* instvars will install variables in symbol table.
    typetok is a token containing symbol table pointer for type. */
 void  instvars(TOKEN idlist, TOKEN typetok){
+
+	printf("\ninstalling vars...\n");
 	SYMBOL sym, typesym; int align;
-	//typesym = typetok->symtype;				//this doesnt work but was provided in class notes. 
-	typesym = searchst(typetok->stringval);		//this works though...
+	typesym = typetok->symtype;				//original
+	//typesym = searchst(typetok->stringval);		//my temp fix. Dont believe I need this anymore. Working correctly now.
+	printf("type name is %s\n", typetok->stringval);
+	printf("symtype = %s\n\n", typetok->symtype->namestring);
 	align = alignsize(typesym);
 	//for each id
 	while(idlist != NULL){ 		
