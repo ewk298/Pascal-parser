@@ -213,6 +213,13 @@ exprORassign : expr
 TOKEN instarray(TOKEN bounds, TOKEN typetok){
 	printf("installing array\n");
 	//need to point typetok to the symbol for the type of array
+	SYMBOL array = makesym("array");
+	array->kind = ARRAYSYM;
+	array->datatype = typetok->symtype;
+	array->highbound = bounds->symtype->highbound;
+	array->lowbound = bounds->symtype->lowbound;
+	
+	typetok->symtype = array;
 	return typetok;
 }
  
