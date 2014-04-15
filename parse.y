@@ -96,7 +96,7 @@ TOKEN parseresult;
 			;
 			
 typegroup   : IDENTIFIER EQ type 		{insttype($1, $3);}
-			
+			;
 			
 	pblock  : LABEL numberlist SEMICOLON block {$$ = $4;}
 			;
@@ -150,7 +150,6 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3)
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
 			 | REPEAT repeatTerms UNTIL expr		{$$ = makerepeat($1, $2, $3, $4);}
 			 | exprORassign
-	         
              ;
 			 
 repeatTerms : exprORassign SEMICOLON repeatTerms { $$ = cons($1, $3);}
@@ -256,15 +255,18 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
  /* instpoint will install a pointer type in symbol table */
 TOKEN instpoint(TOKEN tok, TOKEN typename){
 	printf("installing pointer...\n");
+	SYMBOL tsym = searchst(typename->stringval);
 	printf("%s\n", typename->stringval);
-	SYMBOL temp = makesym(typename->stringval);
+	SYMBOL temp = insertsym(typename->stringval);
 	temp->kind = TYPESYM;
 	
 	
-	SYMBOL pointersym = makesym("");
+	SYMBOL pointersym = makesym(typename->stringval);		
 	pointersym->kind = POINTERSYM;
 	pointersym->datatype = temp;
 	pointersym->size = basicsizes[POINTER];
+	pointersym->basicdt = POINTER;
+	printf("POINTER = %d\n", POINTER);
 	
 	tok->symtype = pointersym;
 	
@@ -359,6 +361,8 @@ TOKEN instrec(TOKEN rectok, TOKEN argstok){
 		temptab[i]->link = temptab[i+1];
 	}
 	
+
+	
 	record->datatype = first;
 	record->size = size;
 	
@@ -395,13 +399,41 @@ TOKEN instfields(TOKEN idlist, TOKEN typetok){
    typetok is a token containing symbol table pointers. */
 void  insttype(TOKEN typename, TOKEN typetok){
 	printf("installing %s into symbol table...\n", typename->stringval);
+	printf("previous entry for %s...?", typename->stringval);
+	SYMBOL temp = searchst(typename->stringval);
+	if(temp){
+		printf(" yes!\n");
+		temp->kind = TYPESYM;
+		temp->datatype = typetok->symtype;
+		temp->size = typetok->symtype->size;
+		temp->basicdt = typetok->symtype->basicdt;
+	}
+	else{
+		printf(" no\n");
+	
 	//make a symbol for typename. Datatype for sym = typetok->symtype
 	SYMBOL typesym = insertsym(typename->stringval);
 	typesym->kind = TYPESYM;
 	typesym->datatype = typetok->symtype;
 	typesym->size = typetok->symtype->size;
+	typesym->basicdt = typetok->symtype->basicdt;
+	
+	}
+	/* //see if typename was already entered into the table. Link old symbol to new
+	SYMBOL previnstall = searchst(typename->stringval);
+	if(previnstall){
+		printf("previously installed!!!!!!!!!!!!!!!!!!!!!!\n");
+		printf("size 1: %d, ", typesym->size);
+		typesym = typetok->symtype;
+		printf("size 2: %d\n", typesym->size);
+	} */
+	
+	
+	
+	
 
-	printf("NAME: %s, DATATYPE KIND: %d, SIZE: %d\n", typesym->namestring, typesym->datatype->kind, typesym->size);
+	//printf("NAME: %s, DATATYPE KIND: %d, SIZE: %d\n", typesym->namestring, typesym->datatype->kind, typesym->size);
+	//printf("DATATYPE KIND: %d, SIZE: %d\n", typesym->datatype->kind, typesym->size);
 }
  
  /* instlabel installs a user label into the label table */
@@ -547,12 +579,19 @@ TOKEN processProgram(TOKEN tok1, TOKEN tok2, TOKEN tok3, TOKEN tok4, TOKEN tok5)
    typetok is a token containing symbol table pointer for type. */
 void  instvars(TOKEN idlist, TOKEN typetok){
 
+	//need to link typetok to its symbol in table
+	
+
 	printf("\ninstalling vars...\n");
 	SYMBOL sym, typesym; int align;
 	typesym = typetok->symtype;				//original
 	//typesym = searchst(typetok->stringval);		//my temp fix. Dont believe I need this anymore. Working correctly now.
 	printf("type name is %s\n", typetok->stringval);
-	printf("symtype = %s\n\n", typetok->symtype->namestring);
+	printf("basicdt = %d\n", typetok->datatype);
+	printf("typesym basicdt = %d\n", typesym->basicdt);
+	printf("symtype = %s\n", typetok->symtype->namestring);
+	if(typesym->datatype)
+		printf("symtype size = %d\n\n", typesym->datatype->datatype->size);
 	align = alignsize(typesym);
 	//for each id
 	while(idlist != NULL){ 		
@@ -584,22 +623,48 @@ TOKEN copytoken(TOKEN tok){
    tok is a (now) unused token that is recycled. */
 TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 {
-	TOKEN func = copytoken(tok);
+	TOKEN func;
+	func = copytoken(tok);
 	func->tokentype = OPERATOR;
 	func->datatype = STRINGTYPE;
 	func->whichval = FUNCALLOP;
 	func->link = NULL;
-	//cons(fn, args);
-	fn->link = args;
-	func->operands = fn;
 	
-	//search symbol table for function. Need to check if arguments need to be coerced
-	SYMBOL func_symbol = searchst(fn->stringval);
-	int return_type = func_symbol->datatype->basicdt;
-	int arg_type = func_symbol->datatype->link->basicdt;
-	printf("\n\nfunction name is %s\n", fn->stringval);
-	printf("function return type = %d\n", return_type);
-	printf("function argument type = %d\n\n", arg_type);
+	if(strcmp(fn->stringval, "new") == 0){
+		printf("making new function...\n");
+		//create number token for size of allocated memory
+		TOKEN size = copytoken(tok);
+		size->tokentype = NUMBERTOK;
+		size->datatype = INTEGER;
+		size->symtype = searchst("integer");
+		size->operands = NULL;
+		size->link = NULL;
+		size->intval = searchst(args->stringval)->datatype->datatype->datatype->size;
+		printf("%s\n", args->stringval);
+		printf("%d\n", searchst(args->stringval)->datatype->datatype->datatype->size);		//first dt points to pp, next points to person pointer, next points to person??
+		fn->link = size;
+		func->operands = fn;
+		//create an assignop. operand is fn...
+		TOKEN assignop = copytoken(size);
+		assignop->whichval = ASSIGNOP;
+		assignop->tokentype = OPERATOR;
+		
+		return binop(assignop, args, func);
+		
+	}
+	
+	else{
+		fn->link = args;
+		func->operands = fn;
+		
+		//search symbol table for function. Need to check if arguments need to be coerced
+		SYMBOL func_symbol = searchst(fn->stringval);
+		int return_type = func_symbol->datatype->basicdt;
+		int arg_type = func_symbol->datatype->link->basicdt;
+		printf("\n\nfunction name is %s\n", fn->stringval);
+		printf("function return type = %d\n", return_type);
+		printf("function argument type = %d\n\n", arg_type);
+	}
 
 	return func;
 }

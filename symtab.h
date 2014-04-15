@@ -44,13 +44,13 @@
 #define TYPESYM      8
 #define POINTERSYM   9
 
-/* The following defines are commented out, but may be needed.
+//The following defines are commented out, but may be needed.
 #define INTEGER    0
 #define REAL       1
 #define STRINGTYPE 2
 #define BOOLETYPE  3
 #define POINTER    4
-    */
+   
 
 //label table
 #define MAXLABELS 50

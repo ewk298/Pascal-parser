@@ -66,19 +66,18 @@ type complex = record re, im: real end;
 					 
 var c,d: complex; i, sum: integer;
 	ac: array[1..10] of complex;
-  aco: array[1..10, color] of color;
+	aco: array[1..10, color] of color;
+	john, mary, fred, ptr: pp;
 	people: array[1..20] of person;
 	 
 	 
 begin
+	new(john);
+	new(mary);
+   new(fred);
+
    for i := 0 to lim do
-      begin 
-		x := d*i; y := exp(-x)*sin(c*x);
-		n := iround(s*y) + h; 
-		repeat write(' '); n := n-1
-		until n=0;
       writeln('*')
-   end
 end.
 
 
