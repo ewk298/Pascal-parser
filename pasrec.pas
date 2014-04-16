@@ -87,8 +87,17 @@ begin
    fred^.age := 20;
    fred^.friend := nil;
    john^.friend^.friend^.location.im := 4.5;
-   for i := 0 to lim do
-      writeln('*')
+   ac[7].re := john^.salary;
+   ptr := john;
+   sum := 0;
+   i := 1;
+   while ptr <> nil do
+     begin
+		writeln('*');
+		writeln('*')
+	 end;
+	
+  
 end.
 
 

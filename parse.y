@@ -144,6 +144,7 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3)
 	simpletype: IDENTIFIER						{$$ = findtype($1);}
 			| LPAREN idlist RPAREN				{$$ = instenum($2);}
 			| NUMBER DOTDOT NUMBER				{$$ = makesubrange($2, $1->intval, $3->intval);}
+			| NUMBER
 			;
   statement  : NUMBER COLON statement			{$$ = dolabel($1, $2, $3);}
 			 | BEGINBEGIN statement endpart
@@ -151,6 +152,7 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3)
              |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
 			 | REPEAT repeatTerms UNTIL expr		{$$ = makerepeat($1, $2, $3, $4);}
+			 | WHILE expr DO statement SEMICOLON          {$$ = makewhile($1, $2, $3, $4);}
 			 | exprORassign
              ;
 			 
@@ -170,12 +172,15 @@ exprORassign : expr
              |  /* empty */                    { $$ = NULL; }
              ;
 			 
-  assignment :  variable ASSIGN expr         { $$ = binop($2, $1, $3); }
+  assignment : variable ASSIGN variable      {$$ = binop($2, $1, $3); /*causes more conflicts. Will need to fix grammar*/}
+			 | variable ASSIGN expr         { $$ = binop($2, $1, $3); }
+			 
              ;
 			 
-variable	 : variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
+variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
+			 | variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
 			 | variable POINT				{$$ = dopoint($1, $2);}
-			 | IDENTIFIER
+			 | IDENTIFIER					{$$ = findid($1);/* want to replace constants with actual value here?? */}
 			 ;
 			 
   expr       :   IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
@@ -183,6 +188,7 @@ variable	 : variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
 			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
 			 | MINUS factor						{$$ = unaryop($1, $2);}
 			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
+			 | term NE term						{$$ = binop($2, $1, $3);} 
 			 | STRING
              |  term 
 			 | factor
@@ -219,6 +225,37 @@ variable	 : variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+/* makewhile makes structures for a while statement.
+   tok and tokb are (now) unused tokens that are recycled. */
+TOKEN makewhile(TOKEN tok, TOKEN expr, TOKEN tokb, TOKEN statement){
+	printf("making while loop\n");
+	return tok;
+}
+ 
+ /* arrayref processes an array reference a[i]
+   subs is a list of subscript expressions.
+   tok and tokb are (now) unused tokens that are recycled. */
+TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
+	printf("\nprocessing array reference!!!!!!!!!!!!!!!!\n");
+	SYMBOL array = searchst(arr->stringval);
+	printf("array size: %d\n", array->size);
+	SYMBOL arrtype = array->datatype->datatype->datatype;
+	printf("array type size: %d\n", arrtype->size);
+	SYMBOL prevtype = array->datatype;
+	printf("array type: %s\n", array->datatype->datatype->namestring);
+	int offset = arrtype->size * (subs->intval - 1);
+	printf("offset = %d\n\n", offset);
+	TOKEN aref = talloc();
+	aref->tokentype = OPERATOR;
+	aref->whichval = AREFOP;
+	aref->operands = arr;
+	//recycle subs for offset
+	subs->intval = offset;
+	arr->link = subs;
+	aref->symtype = prevtype;				//linking to complex right now. Check back on this.
+	return aref;
+}
+ 
  //converts a nil token to a number token with value of 0
 TOKEN convertnil(TOKEN nil){
 	printf("converting nil to 0\n");
@@ -942,16 +979,21 @@ TOKEN cons(TOKEN item, TOKEN list)           /* add item to front of list */
   }
 
 TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
-  { op->operands = lhs;          /* link operands to operator       */
+  { 
+	printf("inside binop...\n");
+	
+	op->operands = lhs;          /* link operands to operator       */
     lhs->link = rhs;             /* link second operand to first    */
     rhs->link = NULL;            /* terminate operand list          */
 	TOKEN op_copy = copytoken(op);
+	
 	//getting type of second argument
 	SYMBOL second = searchst(rhs->stringval);
 	if(second != NULL)
 		//printf("rhs datatype = %d\n\n", second->basicdt);
 	
-	//need to coerce integer to float.
+	//UNCOMMENT THIS BLOCK BEFORE RUNNING GRAPH1.PAS. TEMPORARILY COMMENTED OUT TO REMOVE ALL COERCION
+	/* //need to coerce integer to float.
 	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE) && (lhs->whichval != 25)){		//hardcoded special case for arefop. Should not do this!!!
 		//coerce lhs to float
 		if(lhs->datatype == INTEGER){
@@ -972,15 +1014,16 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 			lhs->link = op_copy;
 		}
 	}
+	
 	//lhs is an aref
 	if(lhs->whichval == 25 && op->whichval == ASSIGNOP){
 		//printf("\ninside binop...\n");
 		//printf("%s\n", lhs->symtype->datatype->namestring);
-		SYMBOL type = searchst(lhs->symtype->datatype->namestring);
+		//SYMBOL type = searchst(lhs->symtype->datatype->namestring);		
 		//printf("%s\n", type->datatype->datatype->namestring);
 		//printf("%d\n", type->datatype->datatype->datatype->datatype->datatype->basicdt);
 		//printf("could coerce\n");
-	}
+	}  */
 	
     if (DEBUG & DB_BINOP)
        { printf("binop\n");
@@ -988,6 +1031,9 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
          dbugprinttok(lhs);
          dbugprinttok(rhs);
        };
+	   
+
+	printf("here\n");
     return op;
   }
   
