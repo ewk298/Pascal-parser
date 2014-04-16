@@ -94,11 +94,18 @@ begin
    while ptr <> nil do
      begin
 		sum := sum + ptr^.age;
+		people[i].age := ptr^.age;
 		aco[i,white] := john^.favorite;
-		
-		writeln('*')
+		ptr := ptr^.friend;
+		i := i + 1
 	 end;
-	
+	write('i = ');
+	writeln(i);
+   write('Sum of ages = ');
+   writeln(sum);
+   write('Fred loc im = ');
+   writeln(fred^.location.im);
+	i := i + 1
   
 end.
 

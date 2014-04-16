@@ -152,7 +152,7 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3)
              |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
 			 | REPEAT repeatTerms UNTIL expr		{$$ = makerepeat($1, $2, $3, $4);}
-			 | WHILE expr DO statement SEMICOLON          {$$ = makewhile($1, $2, $3, $4);}
+			 | WHILE expr DO statement           {$$ = makewhile($1, $2, $3, $4);}
 			 | exprORassign
              ;
 			 
@@ -177,7 +177,7 @@ exprORassign : expr
 			 
              ;
 			 
-variable	 : variable LBRACKET IDENTIFIER COMMA IDENTIFIER RBRACKET		{$3->link = $5; $$ = arrayref($1, $2, $3, $4);}
+variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
 			 | variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
 			 | variable POINT				{$$ = dopoint($1, $2);}
 			 | IDENTIFIER					{$$ = findid($1);/* want to replace constants with actual value here?? */}
@@ -248,7 +248,17 @@ TOKEN makewhile(TOKEN tok, TOKEN expr, TOKEN tokb, TOKEN statement){
 	
 	label->link = ifop;
 	iftest->link = statement;
-
+	//link goto at end of statement list
+	TOKEN temp = statement->operands;
+	while(temp->link)
+		temp = temp->link;
+	
+	//create goto
+	TOKEN got = talloc();
+	got->tokentype = OPERATOR;
+	got->whichval = GOTOOP;
+	TOKEN gotonum = copytoken(number);
+	temp->link = unaryop(got, gotonum);
 
 	
 	return progn;
@@ -259,13 +269,19 @@ TOKEN makewhile(TOKEN tok, TOKEN expr, TOKEN tokb, TOKEN statement){
    tok and tokb are (now) unused tokens that are recycled. */
 TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 	int flag = 0;
+	int twod = 0;
+	if(subs->link)
+		twod = 1;
+	
 	TOKEN temp = subs;
 	printf("\nprocessing array reference!!!!!!!!!!!!!!!!\n");
-	printf("printing fields\n");
+	printf("%s dimensional\n", twod?"2":"1");
+	
+	/* printf("printing fields\n");
 	while(temp){
 		printf("%s\n", temp->stringval);
 		temp = temp->link;
-	}
+	} */
 	printf("subs: %s\n", subs->stringval);
 	SYMBOL array = searchst(arr->stringval);
 	//printf("array size: %d\n", array->size);
@@ -274,47 +290,109 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 	SYMBOL prevtype = array->datatype;
 	//printf("array type: %s\n", array->datatype->datatype->namestring);
 	TOKEN newsubs;
-	if(subs->tokentype == IDENTIFIERTOK){
-		printf("creating expression for subscript\n");
-		printf("%d\n", arrtype->size);
-		//multiple index by size of elements
-		TOKEN times = talloc();
-		times->tokentype = OPERATOR;
-		times->whichval = TIMESOP;
-		//creating number tok
-		TOKEN size = talloc();
-		size->tokentype = NUMBERTOK;
-		size->datatype = INTEGER;
-		size->intval = arrtype->size;
-		newsubs = binop(times, size, subs);
-		//correct off by one type size
-		TOKEN plus = copytoken(times);
-		plus->whichval = PLUSOP;
-		TOKEN neg = copytoken(size);
-		neg->intval = -neg->intval;
-		newsubs = binop(plus, neg, newsubs);
-		flag = 1;
+	//2 dimensional
+	if(twod){
+		arrtype = array->datatype->datatype;	//modification for 2d array. Backing up one.
+		printf("2d array of %s\n", array->datatype->datatype->datatype->namestring);
+		printf("array type: %s\n", array->datatype->datatype->namestring);
+		if(subs->tokentype == IDENTIFIERTOK){
+			printf("creating expression for subscript\n");
+			printf("%d\n", arrtype->size);
+			//multiple index by size of elements
+			TOKEN times = talloc();
+			times->tokentype = OPERATOR;
+			times->whichval = TIMESOP;
+			//creating number tok
+			TOKEN size = talloc();
+			size->tokentype = NUMBERTOK;
+			size->datatype = INTEGER;
+			size->intval = arrtype->size;
+			//see if 2d offset needs to be added
+			if(subs->link){
+				printf("add offset for second dimension\n");
+				
+			}
+			newsubs = binop(times, size, subs);
+			//correct off by one type size
+			TOKEN plus = copytoken(times);
+			plus->whichval = PLUSOP;
+			TOKEN neg = copytoken(size);
+			neg->intval = -neg->intval + 4;			//hc. remove
+			newsubs = binop(plus, neg, newsubs);
+			flag = 1;
 		
 	
 		
-	}	
-	
-	int offset = arrtype->size * (subs->intval - 1);
-	printf("offset = %d\n\n", offset);
-	TOKEN aref = talloc();
-	aref->tokentype = OPERATOR;
-	aref->whichval = AREFOP;
-	aref->operands = arr;
-	//recycle subs for offset
-	
-	if(flag)
-		arr->link = newsubs;
-	else{
-		subs->intval = offset;
-		arr->link = subs;
+		}	
+		
+		int offset = arrtype->size * (subs->intval - 1);
+		printf("offset = %d\n\n", offset);
+		TOKEN aref = talloc();
+		aref->tokentype = OPERATOR;
+		aref->whichval = AREFOP;
+		aref->operands = arr;
+		//recycle subs for offset
+		
+		if(flag)
+			arr->link = newsubs;
+		else{
+			subs->intval = offset;
+			arr->link = subs;
+		}
+		aref->symtype = prevtype;				
+		return aref;
 	}
-	aref->symtype = prevtype;				//linking to complex right now. Check back on this.
-	return aref;
+	//1 dimensional
+	else{
+		printf("array type: %s\n", array->datatype->datatype->namestring);
+		if(subs->tokentype == IDENTIFIERTOK){
+			printf("creating expression for subscript\n");
+			printf("%d\n", arrtype->size);
+			//multiple index by size of elements
+			TOKEN times = talloc();
+			times->tokentype = OPERATOR;
+			times->whichval = TIMESOP;
+			//creating number tok
+			TOKEN size = talloc();
+			size->tokentype = NUMBERTOK;
+			size->datatype = INTEGER;
+			size->intval = arrtype->size;
+			//see if 2d offset needs to be added
+			if(subs->link){
+				printf("add offset for second dimension\n");
+				
+			}
+			newsubs = binop(times, size, subs);
+			//correct off by one type size
+			TOKEN plus = copytoken(times);
+			plus->whichval = PLUSOP;
+			TOKEN neg = copytoken(size);
+			neg->intval = -neg->intval;
+			newsubs = binop(plus, neg, newsubs);
+			flag = 1;
+		
+	
+		
+		}	
+		
+		int offset = arrtype->size * (subs->intval - 1);
+		printf("offset = %d\n\n", offset);
+		TOKEN aref = talloc();
+		aref->tokentype = OPERATOR;
+		aref->whichval = AREFOP;
+		aref->operands = arr;
+		//recycle subs for offset
+		
+		if(flag)
+			arr->link = newsubs;
+		else{
+			subs->intval = offset;
+			arr->link = subs;
+		}
+		aref->symtype = prevtype;				
+		return aref;
+	}
+	
 }
  
  //converts a nil token to a number token with value of 0
@@ -978,12 +1056,13 @@ TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
 	binop(plusop, copytoken(i), one);
 	binop(assignop, copytoken(i), plusop);
 	
-	statement->link = assignop;
-	/* TOKEN pointer = statement->link->operands;
-	//skip progn and attach incrementation to end of arguments
-	while(pointer->link != NULL)
-		pointer = pointer->link;
-	pointer->link = assignop; */
+	
+	TOKEN temp = statement->operands;
+	while(temp->link)
+		temp = temp->link;
+		
+	temp->link = assignop;
+	
 	
 	
 	//create goto
