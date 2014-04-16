@@ -144,8 +144,9 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3)
 			| LPAREN idlist RPAREN				{$$ = instenum($2);}
 			| NUMBER DOTDOT NUMBER				{$$ = makesubrange($2, $1->intval, $3->intval);}
 			;
-  statement  :  BEGINBEGIN statement endpart
-													{ $$ = makeprogn($1,cons($2, $3)); }
+  statement  : NUMBER COLON statement			{$$ = dolabel($1, $2, $3);}
+			 | BEGINBEGIN statement endpart
+			        							{ $$ = makeprogn($1,cons($2, $3)); }
              |  IF expr THEN statement endif   		{ $$ = makeif($1, $2, $4, $5); }
 			 | 	FOR assignment TO expr DO statement	{ $$ = makefor(1, $1, $2, $3, $4, $5, $6);}
 			 | REPEAT repeatTerms UNTIL expr		{$$ = makerepeat($1, $2, $3, $4);}
@@ -216,40 +217,106 @@ variable	 : variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+/* dolabel is the action for a label of the form   <number>: <statement>
+   tok is a (now) unused token that is recycled. */
+TOKEN dolabel(TOKEN labeltok, TOKEN tok, TOKEN statement){
+	printf("doing label...\n");
+	TOKEN progn = makeprogn(tok, statement);
+	TOKEN label = talloc();
+	label->tokentype = OPERATOR;
+	label->whichval = LABELOP;
+	label->operands = labeltok;
+	//replace number with internal lable
+	int i = 0;
+	while(labels[i] != labeltok->intval)
+		i++;
+	labeltok->intval = i;
+	progn->operands = label;
+	label->link = statement;
+	
+	return progn;
+}
+ 
 /* reducedot handles a record reference.
    dot is a (now) unused token that is recycled. */
 TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 	printf("making aref..\n");
 	TOKEN aref = talloc();
-	aref->tokentype = OPERATOR;
-	aref->whichval = AREFOP;
-	aref->operands = var;
-	//link var to its offset in the record
-	printf("symbol name: %s\n", var->symtype->namestring);
-	//printf("%d\n", var->symtype->datatype->datatype->datatype->size);
-	SYMBOL record = var->symtype->datatype->datatype->datatype;
-	SYMBOL ff = record->datatype->datatype;										//gets me the symbol for the first field
-	int offset = 0;
-	//printing out field names
-	while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
-		printf("field: %s\n", ff->namestring);
-		//add padding. this could be avoided if each field in a record recorded it's own offset. I guess i haven't done this
+	if(var->whichval == AREFOP){
+		printf("var is aref!!!\n");
+		printf("previous field accessed: %s\n", var->symtype->namestring);
+		//need to add to offset
+		printf("field: %s\n", field->stringval);
+		SYMBOL record = var->symtype->datatype;
+		SYMBOL ff = record->datatype->datatype;										//gets me the symbol for the first field
+		int offset = 0;
+		while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
+			printf("field: %s\n", ff->namestring);
+			//add padding. this could be avoided if each field in a record recorded it's own offset. I guess i haven't done this
+			offset += ff->size;
+			if((offset % 8 != 0) && (ff->size == 8)){
+				offset += 4;
+				printf("added padding\n");
+			}
+			printf("offset = %d\n", offset);
+			ff = ff->link;
+		}
+		//link aref to field accessed. useful to multiple dot operatos
+		aref->symtype = ff;
+		
+		//special case for padding at end
 		if((offset % 8 != 0) && (ff->size == 8)){
-			offset += 4;
+				offset += 4;
+				printf("added padding\n");
 		}
 		
-		offset += ff->size;
+		//adding offset to previous aref offset. Doing this because redundant aref was removed
+		var->operands->link->intval += offset;
 		
-		ff = ff->link;
+		return var;
+	}
+	else{	
+		aref->tokentype = OPERATOR;
+		aref->whichval = AREFOP;
+		aref->operands = var;
+		//link var to its offset in the record
+		printf("symbol name: %s\n", var->symtype->namestring);
+		//printf("%d\n", var->symtype->datatype->datatype->datatype->size);
+		SYMBOL record = var->symtype->datatype->datatype->datatype;
+		SYMBOL ff = record->datatype->datatype;										//gets me the symbol for the first field
+		int offset = 0;
+		//printing out field names
+		while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
+			printf("field: %s\n", ff->namestring);
+			//add padding. this could be avoided if each field in a record recorded it's own offset. I guess i haven't done this
+			offset += ff->size;
+			if((offset % 8 != 0) && (ff->size == 8)){
+				offset += 4;
+				printf("added padding\n");
+			}
+			printf("offset = %d\n", offset);
+			ff = ff->link;
+		}
+		//link aref to field accessed. useful to multiple dot operatos
+		aref->symtype = ff;
+		
+		//special case for padding at end
+		if((offset % 8 != 0) && (ff->size == 8)){
+				offset += 4;
+				printf("added padding\n");
+			}
+			
+		printf("field: %s\n", ff->namestring);
+		
+		printf("aref offset = %d\n\n", offset);
+		//create number token for offset
+		TOKEN number = talloc();
+		number->tokentype = NUMBERTOK;
+		number->datatype = INTEGER;
+		number->intval = offset;
+		var->link = number;
 	}
 	
-	printf("aref offset = %d\n", offset);
-	//create number token for offset
-	TOKEN number = talloc();
-	number->tokentype = NUMBERTOK;
-	number->datatype = INTEGER;
-	number->intval = offset;
-	var->link = number;
 
 	
 	
@@ -259,13 +326,13 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
  /* dopoint handles a ^ operator.
    tok is a (now) unused token that is recycled. */
 TOKEN dopoint(TOKEN var, TOKEN tok){
-	printf("handling point...\n");
+	//printf("handling point...\n");
 	TOKEN pointer = talloc();
 	pointer->tokentype = OPERATOR;
 	pointer->whichval = POINTEROP;
 	pointer->operands = var;
 	SYMBOL id = searchst(var->stringval);
-	printf("%s\n", id->namestring);
+	//printf("%s\n", id->namestring);
 	pointer->symtype = id;						//linking pointer to id's symbol in table
 	return pointer;
 }
@@ -276,7 +343,7 @@ TOKEN dopoint(TOKEN var, TOKEN tok){
 TOKEN instarray(TOKEN bounds, TOKEN typetok){
 	
 
-	printf("installing array with bounds %d .. %d\n", bounds->symtype->lowbound, bounds->symtype->highbound);
+	//printf("installing array with bounds %d .. %d\n", bounds->symtype->lowbound, bounds->symtype->highbound);
 	//need to point typetok to the symbol for the type of array
 	SYMBOL array = makesym("array");
 	array->kind = ARRAYSYM;
@@ -284,7 +351,7 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
 	array->highbound = bounds->symtype->highbound;
 	array->lowbound = bounds->symtype->lowbound;
 	int size = array->datatype->size * (array->highbound - array->lowbound + 1);
-	printf("array size = %d\n", size);
+	//printf("array size = %d\n", size);
 	array->size = size;
 
 	//this works for only 2 dimensional arrays right now. DO inner arrays first!!!
@@ -296,7 +363,7 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
 		//these are the correct bounds
 		int high = bounds->link->symtype->datatype->highbound;
 		int low = bounds->link->symtype->datatype->lowbound;
-		printf("new high: %d, new low: %d\n", high, low);
+		//printf("new high: %d, new low: %d\n", high, low);
 		TOKEN subrange = makesubrange(copytoken(typetok), low, high);
 		second_array = instarray(subrange, typetok);
 		array->datatype = second_array->symtype;
@@ -314,9 +381,9 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
  
  /* instpoint will install a pointer type in symbol table */
 TOKEN instpoint(TOKEN tok, TOKEN typename){
-	printf("installing pointer...\n");
+	//printf("installing pointer...\n");
 	SYMBOL tsym = searchst(typename->stringval);
-	printf("%s\n", typename->stringval);
+	//printf("%s\n", typename->stringval);
 	SYMBOL temp = insertsym(typename->stringval);
 	temp->kind = TYPESYM;
 	
@@ -326,12 +393,12 @@ TOKEN instpoint(TOKEN tok, TOKEN typename){
 	pointersym->datatype = temp;
 	pointersym->size = basicsizes[POINTER];
 	pointersym->basicdt = POINTER;
-	printf("POINTER = %d\n", POINTER);
+	//printf("POINTER = %d\n", POINTER);
 	
 	tok->symtype = pointersym;
 	
 	
-	printf("%d\n", tok->symtype->size);
+	//printf("%d\n", tok->symtype->size);
 	return tok;
 }
  
@@ -339,7 +406,7 @@ TOKEN instpoint(TOKEN tok, TOKEN typename){
    e.g., type color = (red, white, blue)
    by calling makesubrange and returning the token it returns. */
 TOKEN instenum(TOKEN idlist){
-	printf("installing enum into symbol table...\n");
+	//printf("installing enum into symbol table...\n");
 	int low = 0, high = 0;
 	TOKEN temp = idlist;
 	while(temp){
@@ -365,7 +432,7 @@ TOKEN instenum(TOKEN idlist){
 /* makesubrange makes a SUBRANGE symbol table entry, puts the pointer to it
    into tok, and returns tok. */
 TOKEN makesubrange(TOKEN tok, int low, int high){
-	printf("making subrange from %d to %d...\n", low, high);
+	//printf("making subrange from %d to %d...\n", low, high);
 	//put the pointer to the subrange symbol in tok
 	SYMBOL subrange = makesym("subrange");
 	subrange->kind = SUBRANGE;
@@ -427,11 +494,14 @@ TOKEN instrec(TOKEN rectok, TOKEN argstok){
 	record->size = size;
 	
 	printf("KIND: %d, DATATYPE: %s, SIZE: %d\n", record->kind, record->datatype->namestring, record->size);
+	printf("first = %s\n", record->datatype->namestring);
 	
 	
-	printf("\n");
+	
 	
 	rectok->symtype = record;			//ie. "complex" datatype will point to this RECORDSYM
+	printf("first = %s\n", rectok->symtype->datatype->namestring);
+	printf("\n");
 	return rectok;
 }
 
@@ -440,18 +510,18 @@ TOKEN instrec(TOKEN rectok, TOKEN argstok){
    typetok is a token whose symtype is a symbol table pointer.
    Note that nconc() can be used to combine these lists after instrec() */
 TOKEN instfields(TOKEN idlist, TOKEN typetok){
-	printf("inside instfields...\n");
+	//printf("inside instfields...\n");
 	TOKEN temp = idlist;
 	while(temp){
 		temp->symtype = typetok->symtype;			//connecting each id in list to it's type
-		printf("%s, ", temp->stringval);
+		//printf("%s, ", temp->stringval);
 		temp = temp->link;
 	}
 
 	
-	printf("\n%s\n", typetok->symtype->namestring);
+	//printf("\n%s\n", typetok->symtype->namestring);
 	
-	printf("\n"); 
+	//printf("\n"); 
 	return idlist;
 }
  
@@ -460,6 +530,7 @@ TOKEN instfields(TOKEN idlist, TOKEN typetok){
 void  insttype(TOKEN typename, TOKEN typetok){
 	printf("installing %s into symbol table...\n", typename->stringval);
 	printf("previous entry for %s...?", typename->stringval);
+	//printf("size: %d\n", typetok->symtype->datatype->size);
 	SYMBOL temp = searchst(typename->stringval);
 	if(temp){
 		printf(" yes!\n");
@@ -479,21 +550,14 @@ void  insttype(TOKEN typename, TOKEN typetok){
 	typesym->basicdt = typetok->symtype->basicdt;
 	
 	}
-	/* //see if typename was already entered into the table. Link old symbol to new
-	SYMBOL previnstall = searchst(typename->stringval);
-	if(previnstall){
-		printf("previously installed!!!!!!!!!!!!!!!!!!!!!!\n");
-		printf("size 1: %d, ", typesym->size);
-		typesym = typetok->symtype;
-		printf("size 2: %d\n", typesym->size);
-	} */
-	
+	//printf("%s\n", typetok->symtype->datatype->namestring);
+
+	printf("\n\n");
 	
 	
 	
 
-	//printf("NAME: %s, DATATYPE KIND: %d, SIZE: %d\n", typesym->namestring, typesym->datatype->kind, typesym->size);
-	//printf("DATATYPE KIND: %d, SIZE: %d\n", typesym->datatype->kind, typesym->size);
+
 }
  
  /* instlabel installs a user label into the label table */
@@ -853,9 +917,11 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 		printf("rhs datatype = %d\n\n", second->basicdt);
 	
 	//need to coerce integer to float.
-	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE)){
+	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE) && (lhs->whichval != 25)){		//hardcoded special case for arefop. Should not do this!!!
 		//coerce lhs to float
 		if(lhs->datatype == INTEGER){
+			printf("coercing...\n");
+			printf("lhs %d\n", lhs->whichval);
 			op_copy->whichval = FLOATOP;
 			op_copy->operands = lhs;
 			lhs->link = NULL;
@@ -870,6 +936,13 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 			op_copy->link = NULL;
 			lhs->link = op_copy;
 		}
+	}
+	//lhs is an aref
+	if(lhs->whichval == 25){
+		printf("\ninside binop...\n");
+		printf("%s\n", lhs->symtype->datatype->namestring);
+		SYMBOL type = searchst(lhs->symtype->datatype->namestring);
+		//printf("%d\n", type->datatype->size);
 	}
 	
     if (DEBUG & DB_BINOP)

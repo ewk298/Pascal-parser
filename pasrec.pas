@@ -77,7 +77,11 @@ begin
 	new(fred);
 	john^.favorite := blue;
 	john^.age := 19;
-   
+1492: 
+	john^.friend := mary;
+	john^.salary := 40000.0;
+	john^.location.re := 3;
+
    for i := 0 to lim do
       writeln('*')
 end.
