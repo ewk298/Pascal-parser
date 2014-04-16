@@ -73,15 +73,20 @@ var c,d: complex; i, sum: integer;
 	 
 begin
 	new(john);
-	new(mary);
-	new(fred);
-	john^.favorite := blue;
-	john^.age := 19;
-1492: 
-	john^.friend := mary;
-	john^.salary := 40000.0;
-	john^.location.re := 3;
-
+   new(mary);
+   new(fred);
+   john^.favorite := blue;
+   john^.age := 19;
+1492:
+   john^.friend := mary;
+   john^.salary := 40000.0;
+   john^.location.re := 3;
+   mary^.age := 21;
+   mary^.friend := fred;
+1776:
+   fred^.age := 20;
+   fred^.friend := nil;
+   john^.friend^.friend^.location.im := 4.5;
    for i := 0 to lim do
       writeln('*')
 end.

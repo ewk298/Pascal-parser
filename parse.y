@@ -122,10 +122,11 @@ typegroup   : IDENTIFIER EQ type 		{insttype($1, $3);}
 	vargroup: idlist COLON type 				{instvars($1, $3);}
 			;
 			 
-	type	: simpletype						{$$ = $1;}
-			| RECORD fieldlist END				{$$ = instrec($1, $2);}
+	type	
+			: RECORD fieldlist END				{$$ = instrec($1, $2);}
 			| POINT IDENTIFIER					{$$ = instpoint($1, $2);}
 			| ARRAY LBRACKET arglist RBRACKET OF type {$$ = instarray($3, $6);}
+			| simpletype						{$$ = $1;}
 			;
 
 	arglist : simpletype COMMA arglist			{$$ = cons($1, $3);}
@@ -197,6 +198,7 @@ variable	 : variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
              |  IDENTIFIER LPAREN expr RPAREN { $$ = makefuncall($2, $1, $3);}
 			 |  IDENTIFIER						{$$ = findid($1);/* want to replace constants with actual value here?? */}
              |  NUMBER
+			 | NIL								{$$ = convertnil($1);}
              ;
 
 %%
@@ -217,6 +219,16 @@ variable	 : variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+ //converts a nil token to a number token with value of 0
+TOKEN convertnil(TOKEN nil){
+	printf("converting nil to 0\n");
+	TOKEN zero = talloc();
+	zero->tokentype = NUMBERTOK;
+	zero->datatype = INTEGER;
+	zero->intval = 0;
+	return zero;
+}
+ 
 /* dolabel is the action for a label of the form   <number>: <statement>
    tok is a (now) unused token that is recycled. */
 TOKEN dolabel(TOKEN labeltok, TOKEN tok, TOKEN statement){
@@ -240,16 +252,28 @@ TOKEN dolabel(TOKEN labeltok, TOKEN tok, TOKEN statement){
 /* reducedot handles a record reference.
    dot is a (now) unused token that is recycled. */
 TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
+	int prev_not_pointer = 0;					//indicates whether field is a field of var
 	printf("making aref..\n");
-	TOKEN aref = talloc();
-	if(var->whichval == AREFOP){
-		printf("var is aref!!!\n");
-		printf("previous field accessed: %s\n", var->symtype->namestring);
-		//need to add to offset
-		printf("field: %s\n", field->stringval);
-		SYMBOL record = var->symtype->datatype;
-		SYMBOL ff = record->datatype->datatype;										//gets me the symbol for the first field
+	printf("printing var...\n");
+	printtoken(var);
+	printf("previous field accessed: %s\n", var->symtype->namestring);
+	printf("field: %s\n", field->stringval);
+	printf("field: %s\n", var->symtype->datatype->datatype->datatype->namestring);
+	SYMBOL fields = var->symtype->datatype->datatype->datatype;
+	while(fields){
+		if(strcmp(fields->namestring, field->stringval) == 0){
+			printf("previous was NOT a pointer\n");
+			prev_not_pointer = 1;
+		}
+		fields = fields->link;
+	}
+	SYMBOL record;
+	SYMBOL ff;
+	//dont create another aref. add the offset calculated here to the offset of the previous aref
+	if(prev_not_pointer){
+		ff = var->symtype->datatype->datatype->datatype;
 		int offset = 0;
+		//printing out field names
 		while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
 			printf("field: %s\n", ff->namestring);
 			//add padding. this could be avoided if each field in a record recorded it's own offset. I guess i haven't done this
@@ -261,29 +285,27 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 			printf("offset = %d\n", offset);
 			ff = ff->link;
 		}
-		//link aref to field accessed. useful to multiple dot operatos
-		aref->symtype = ff;
+		//link aref to field accessed. useful to multiple dot operators. NOT SURE IF NEEDED HERE.
 		
-		//special case for padding at end
-		if((offset % 8 != 0) && (ff->size == 8)){
-				offset += 4;
-				printf("added padding\n");
-		}
 		
-		//adding offset to previous aref offset. Doing this because redundant aref was removed
+		//adding extra offset
 		var->operands->link->intval += offset;
 		
 		return var;
 	}
-	else{	
+	//create another aref with another 
+	else{
+		record = var->symtype->datatype->datatype->datatype;
+		ff = record->datatype->datatype;										//gets me the symbol for the first field
+		TOKEN aref = talloc();
+		printf("whichval: %d\n", var->whichval);
 		aref->tokentype = OPERATOR;
 		aref->whichval = AREFOP;
 		aref->operands = var;
 		//link var to its offset in the record
-		printf("symbol name: %s\n", var->symtype->namestring);
+		//printf("symbol name: %s\n", var->symtype->namestring);						//this is null when dereferencing a field and not a variable
 		//printf("%d\n", var->symtype->datatype->datatype->datatype->size);
-		SYMBOL record = var->symtype->datatype->datatype->datatype;
-		SYMBOL ff = record->datatype->datatype;										//gets me the symbol for the first field
+	
 		int offset = 0;
 		//printing out field names
 		while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
@@ -315,25 +337,38 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 		number->datatype = INTEGER;
 		number->intval = offset;
 		var->link = number;
-	}
+	
 	
 
 	
 	
-	return aref;
+		return aref;
+	}
+	
+	
 }
  
  /* dopoint handles a ^ operator.
    tok is a (now) unused token that is recycled. */
 TOKEN dopoint(TOKEN var, TOKEN tok){
-	//printf("handling point...\n");
+	printf("\nhandling point...\n\n");
+	SYMBOL id = searchst(var->stringval);
+	//printf("%d\n", id->datatype->datatype->datatype->size);		//john points to pp, points to person, points to record
+	printf("here\n");
 	TOKEN pointer = talloc();
 	pointer->tokentype = OPERATOR;
 	pointer->whichval = POINTEROP;
 	pointer->operands = var;
-	SYMBOL id = searchst(var->stringval);
-	//printf("%s\n", id->namestring);
+	
+	printf("id: %d\n", var->whichval);
+	if(var->whichval == AREFOP){
+		//return var;
+		pointer->symtype = var->symtype;
+		return pointer;
+	}
+	
 	pointer->symtype = id;						//linking pointer to id's symbol in table
+	printf("returning from point.\n");
 	return pointer;
 }
  
@@ -530,7 +565,7 @@ TOKEN instfields(TOKEN idlist, TOKEN typetok){
 void  insttype(TOKEN typename, TOKEN typetok){
 	printf("installing %s into symbol table...\n", typename->stringval);
 	printf("previous entry for %s...?", typename->stringval);
-	//printf("size: %d\n", typetok->symtype->datatype->size);
+	//printf("name: %s\n", typetok->symtype->datatype->namestring);
 	SYMBOL temp = searchst(typename->stringval);
 	if(temp){
 		printf(" yes!\n");
@@ -914,14 +949,14 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 	//getting type of second argument
 	SYMBOL second = searchst(rhs->stringval);
 	if(second != NULL)
-		printf("rhs datatype = %d\n\n", second->basicdt);
+		//printf("rhs datatype = %d\n\n", second->basicdt);
 	
 	//need to coerce integer to float.
 	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE) && (lhs->whichval != 25)){		//hardcoded special case for arefop. Should not do this!!!
 		//coerce lhs to float
 		if(lhs->datatype == INTEGER){
-			printf("coercing...\n");
-			printf("lhs %d\n", lhs->whichval);
+			//printf("coercing...\n");
+			//printf("lhs %d\n", lhs->whichval);
 			op_copy->whichval = FLOATOP;
 			op_copy->operands = lhs;
 			lhs->link = NULL;
@@ -938,11 +973,13 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 		}
 	}
 	//lhs is an aref
-	if(lhs->whichval == 25){
-		printf("\ninside binop...\n");
-		printf("%s\n", lhs->symtype->datatype->namestring);
+	if(lhs->whichval == 25 && op->whichval == ASSIGNOP){
+		//printf("\ninside binop...\n");
+		//printf("%s\n", lhs->symtype->datatype->namestring);
 		SYMBOL type = searchst(lhs->symtype->datatype->namestring);
-		//printf("%d\n", type->datatype->size);
+		//printf("%s\n", type->datatype->datatype->namestring);
+		//printf("%d\n", type->datatype->datatype->datatype->datatype->datatype->basicdt);
+		//printf("could coerce\n");
 	}
 	
     if (DEBUG & DB_BINOP)

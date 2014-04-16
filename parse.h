@@ -206,3 +206,6 @@ TOKEN copytoken(TOKEN tok);
 
 //processes the first part of program
 TOKEN processProgram(TOKEN tok1, TOKEN tok2, TOKEN tok3, TOKEN tok4, TOKEN tok5);
+
+ //converts a nil token to a number token with value of 0
+TOKEN convertnil(TOKEN nil);
