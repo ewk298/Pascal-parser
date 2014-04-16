@@ -130,7 +130,7 @@ typegroup   : IDENTIFIER EQ type 		{insttype($1, $3);}
 			;
 
 	arglist : simpletype COMMA arglist			{$$ = cons($1, $3);}
-			| simpletype
+			| simpletype						{$$ = cons($1, NULL);}
 			;
 	
 fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3), $5);}
@@ -177,7 +177,7 @@ exprORassign : expr
 			 
              ;
 			 
-variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
+variable	 : variable LBRACKET IDENTIFIER COMMA IDENTIFIER RBRACKET		{$3->link = $5; $$ = arrayref($1, $2, $3, $4);}
 			 | variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
 			 | variable POINT				{$$ = dopoint($1, $2);}
 			 | IDENTIFIER					{$$ = findid($1);/* want to replace constants with actual value here?? */}
@@ -198,6 +198,7 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
 		     | term MINUS factor					{$$ = binop($2, $1, $3);}
              |  factor TIMES factor
 			 |  factor
+			 | variable
              ;
 			 
   factor     :  LPAREN expr RPAREN             { $$ = $2; }
@@ -229,20 +230,75 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
    tok and tokb are (now) unused tokens that are recycled. */
 TOKEN makewhile(TOKEN tok, TOKEN expr, TOKEN tokb, TOKEN statement){
 	printf("making while loop\n");
-	return tok;
+	//make another label
+	TOKEN label = talloc();
+	label->tokentype = OPERATOR;
+	label->whichval = LABELOP;
+	//create number tok
+	TOKEN number = talloc();
+	number->tokentype = NUMBERTOK;
+	number->intval = labelnumber++;
+	label->operands = number;
+	TOKEN progn = makeprogn(tok, label);
+	//create if part
+	TOKEN ifop = talloc();
+	ifop->tokentype = OPERATOR;
+	ifop->whichval = IFOP;
+	TOKEN iftest = unaryop(ifop, expr);
+	
+	label->link = ifop;
+	iftest->link = statement;
+
+
+	
+	return progn;
 }
  
  /* arrayref processes an array reference a[i]
    subs is a list of subscript expressions.
    tok and tokb are (now) unused tokens that are recycled. */
 TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
+	int flag = 0;
+	TOKEN temp = subs;
 	printf("\nprocessing array reference!!!!!!!!!!!!!!!!\n");
+	printf("printing fields\n");
+	while(temp){
+		printf("%s\n", temp->stringval);
+		temp = temp->link;
+	}
+	printf("subs: %s\n", subs->stringval);
 	SYMBOL array = searchst(arr->stringval);
-	printf("array size: %d\n", array->size);
+	//printf("array size: %d\n", array->size);
 	SYMBOL arrtype = array->datatype->datatype->datatype;
-	printf("array type size: %d\n", arrtype->size);
+	//printf("array type size: %d\n", arrtype->size);
 	SYMBOL prevtype = array->datatype;
-	printf("array type: %s\n", array->datatype->datatype->namestring);
+	//printf("array type: %s\n", array->datatype->datatype->namestring);
+	TOKEN newsubs;
+	if(subs->tokentype == IDENTIFIERTOK){
+		printf("creating expression for subscript\n");
+		printf("%d\n", arrtype->size);
+		//multiple index by size of elements
+		TOKEN times = talloc();
+		times->tokentype = OPERATOR;
+		times->whichval = TIMESOP;
+		//creating number tok
+		TOKEN size = talloc();
+		size->tokentype = NUMBERTOK;
+		size->datatype = INTEGER;
+		size->intval = arrtype->size;
+		newsubs = binop(times, size, subs);
+		//correct off by one type size
+		TOKEN plus = copytoken(times);
+		plus->whichval = PLUSOP;
+		TOKEN neg = copytoken(size);
+		neg->intval = -neg->intval;
+		newsubs = binop(plus, neg, newsubs);
+		flag = 1;
+		
+	
+		
+	}	
+	
 	int offset = arrtype->size * (subs->intval - 1);
 	printf("offset = %d\n\n", offset);
 	TOKEN aref = talloc();
@@ -250,8 +306,13 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 	aref->whichval = AREFOP;
 	aref->operands = arr;
 	//recycle subs for offset
-	subs->intval = offset;
-	arr->link = subs;
+	
+	if(flag)
+		arr->link = newsubs;
+	else{
+		subs->intval = offset;
+		arr->link = subs;
+	}
 	aref->symtype = prevtype;				//linking to complex right now. Check back on this.
 	return aref;
 }
@@ -970,6 +1031,7 @@ TOKEN nconc(TOKEN lista, TOKEN listb){
 	   
 TOKEN cons(TOKEN item, TOKEN list)           /* add item to front of list */
   { item->link = list;
+	printf("linking.\n");
     if (DEBUG & DB_CONS)
        { printf("cons\n");
          dbugprinttok(item);

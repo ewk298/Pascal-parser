@@ -87,13 +87,15 @@ begin
    fred^.age := 20;
    fred^.friend := nil;
    john^.friend^.friend^.location.im := 4.5;
-   ac[7].re := john^.salary;
+   
    ptr := john;
    sum := 0;
    i := 1;
    while ptr <> nil do
      begin
-		writeln('*');
+		sum := sum + ptr^.age;
+		aco[i,white] := john^.favorite;
+		
 		writeln('*')
 	 end;
 	
