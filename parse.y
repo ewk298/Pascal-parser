@@ -168,8 +168,14 @@ exprORassign : expr
              |  /* empty */                    { $$ = NULL; }
              ;
 			 
-  assignment :  IDENTIFIER ASSIGN expr         { $$ = binop($2, $1, $3); }
+  assignment :  variable ASSIGN expr         { $$ = binop($2, $1, $3); }
              ;
+			 
+variable	 : variable DOT IDENTIFIER		{$$ = reducedot($1, $2, $3);}
+			 | variable POINT				{$$ = dopoint($1, $2);}
+			 | IDENTIFIER
+			 ;
+			 
   expr       :   IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
 			 | expr PLUS term                 { $$ = binop($2, $1, $3); }
 			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
@@ -210,6 +216,60 @@ exprORassign : expr
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+/* reducedot handles a record reference.
+   dot is a (now) unused token that is recycled. */
+TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
+	printf("making aref..\n");
+	TOKEN aref = talloc();
+	aref->tokentype = OPERATOR;
+	aref->whichval = AREFOP;
+	aref->operands = var;
+	//link var to its offset in the record
+	printf("symbol name: %s\n", var->symtype->namestring);
+	//printf("%d\n", var->symtype->datatype->datatype->datatype->size);
+	SYMBOL record = var->symtype->datatype->datatype->datatype;
+	SYMBOL ff = record->datatype->datatype;										//gets me the symbol for the first field
+	int offset = 0;
+	//printing out field names
+	while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
+		printf("field: %s\n", ff->namestring);
+		//add padding. this could be avoided if each field in a record recorded it's own offset. I guess i haven't done this
+		if((offset % 8 != 0) && (ff->size == 8)){
+			offset += 4;
+		}
+		
+		offset += ff->size;
+		
+		ff = ff->link;
+	}
+	
+	printf("aref offset = %d\n", offset);
+	//create number token for offset
+	TOKEN number = talloc();
+	number->tokentype = NUMBERTOK;
+	number->datatype = INTEGER;
+	number->intval = offset;
+	var->link = number;
+
+	
+	
+	return aref;
+}
+ 
+ /* dopoint handles a ^ operator.
+   tok is a (now) unused token that is recycled. */
+TOKEN dopoint(TOKEN var, TOKEN tok){
+	printf("handling point...\n");
+	TOKEN pointer = talloc();
+	pointer->tokentype = OPERATOR;
+	pointer->whichval = POINTEROP;
+	pointer->operands = var;
+	SYMBOL id = searchst(var->stringval);
+	printf("%s\n", id->namestring);
+	pointer->symtype = id;						//linking pointer to id's symbol in table
+	return pointer;
+}
+ 
  /* instarray installs an array declaration into the symbol table.
    bounds points to a SUBRANGE symbol table entry.
    The symbol table pointer is returned in token typetok. */

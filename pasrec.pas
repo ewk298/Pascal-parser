@@ -74,8 +74,10 @@ var c,d: complex; i, sum: integer;
 begin
 	new(john);
 	new(mary);
-   new(fred);
-
+	new(fred);
+	john^.favorite := blue;
+	john^.age := 19;
+   
    for i := 0 to lim do
       writeln('*')
 end.
