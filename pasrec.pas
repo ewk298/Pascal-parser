@@ -1,6 +1,6 @@
 { pasrec.pas      program to test record operations      06 Aug 09 }
 
-{ program graph1(output);
+program graph1(output);
 label 1492, 1776;
 type complex = record re, im: real end;
      color = (red, white, blue);
@@ -50,9 +50,9 @@ begin
    write('Fred loc im = ');
    writeln(fred^.location.im);
    if sum < 3 then goto 1776
-end. }
+end.
 
-
+{
 program graph1(output);
 label 1492, 1776;
 type complex = record re, im: real end;
@@ -105,8 +105,8 @@ begin
    writeln(sum);
    write('Fred loc im = ');
    writeln(fred^.location.im);
-	i := i + 1
+	if sum < 3 then goto 1776
   
 end.
 
-
+}

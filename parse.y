@@ -46,6 +46,7 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <string.h>
 #include "token.h"
 #include "lexan.h"
 #include "symtab.h"
@@ -154,6 +155,7 @@ fieldlist	: idlist COLON type SEMICOLON fieldlist	{$$ = nconc(instfields($1, $3)
 			 | REPEAT repeatTerms UNTIL expr		{$$ = makerepeat($1, $2, $3, $4);}
 			 | WHILE expr DO statement           {$$ = makewhile($1, $2, $3, $4);}
 			 | exprORassign
+			 | GOTO NUMBER						{$$ = dogoto($1, $2);}
              ;
 			 
 repeatTerms : exprORassign SEMICOLON repeatTerms { $$ = cons($1, $3);}
@@ -183,7 +185,8 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
 			 | IDENTIFIER					{$$ = findid($1);/* want to replace constants with actual value here?? */}
 			 ;
 			 
-  expr       :   IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
+  expr       : IDENTIFIER LT NUMBER				{$$ = binop($2, $1, $3);}
+  			 | IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
 			 | expr PLUS term                 { $$ = binop($2, $1, $3); }
 			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
 			 | MINUS factor						{$$ = unaryop($1, $2);}
@@ -202,7 +205,7 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
              ;
 			 
   factor     :  LPAREN expr RPAREN             { $$ = $2; }
-             |  IDENTIFIER LPAREN expr RPAREN { $$ = makefuncall($2, $1, $3);}
+             |  IDENTIFIER LPAREN expr RPAREN { findid($1); $$ = makefuncall($2, $1, $3);}
 			 |  IDENTIFIER						{$$ = findid($1);/* want to replace constants with actual value here?? */}
              |  NUMBER
 			 | NIL								{$$ = convertnil($1);}
@@ -226,10 +229,27 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
 
  int labelnumber = 0;  /* sequential counter for internal label numbers */
 
+/* dogoto is the action for a goto statement.
+   tok is a (now) unused token that is recycled. */
+TOKEN dogoto(TOKEN tok, TOKEN labeltok){
+	//printf("doing goto\n");
+	TOKEN gotoop = talloc();
+	gotoop->tokentype = OPERATOR;
+	gotoop->whichval = GOTOOP;
+	TOKEN number = talloc();
+	number->tokentype = NUMBERTOK;
+	int index = 0;
+	while(labels[index] != labeltok->intval)
+		index++;
+	number->intval = index;
+	gotoop->operands = number;
+	return gotoop;
+}
+ 
 /* makewhile makes structures for a while statement.
    tok and tokb are (now) unused tokens that are recycled. */
 TOKEN makewhile(TOKEN tok, TOKEN expr, TOKEN tokb, TOKEN statement){
-	printf("making while loop\n");
+	//printf("making while loop\n");
 	//make another label
 	TOKEN label = talloc();
 	label->tokentype = OPERATOR;
@@ -247,7 +267,7 @@ TOKEN makewhile(TOKEN tok, TOKEN expr, TOKEN tokb, TOKEN statement){
 	TOKEN iftest = unaryop(ifop, expr);
 	
 	label->link = ifop;
-	iftest->link = statement;
+	iftest->operands->link = statement;
 	//link goto at end of statement list
 	TOKEN temp = statement->operands;
 	while(temp->link)
@@ -274,15 +294,15 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 		twod = 1;
 	
 	TOKEN temp = subs;
-	printf("\nprocessing array reference!!!!!!!!!!!!!!!!\n");
-	printf("%s dimensional\n", twod?"2":"1");
+	//printf("\nprocessing array reference!!!!!!!!!!!!!!!!\n");
+	//printf("%s dimensional\n", twod?"2":"1");
 	
 	/* printf("printing fields\n");
 	while(temp){
 		printf("%s\n", temp->stringval);
 		temp = temp->link;
 	} */
-	printf("subs: %s\n", subs->stringval);
+	//printf("subs: %s\n", subs->stringval);
 	SYMBOL array = searchst(arr->stringval);
 	//printf("array size: %d\n", array->size);
 	SYMBOL arrtype = array->datatype->datatype->datatype;
@@ -293,11 +313,11 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 	//2 dimensional
 	if(twod){
 		arrtype = array->datatype->datatype;	//modification for 2d array. Backing up one.
-		printf("2d array of %s\n", array->datatype->datatype->datatype->namestring);
-		printf("array type: %s\n", array->datatype->datatype->namestring);
+		//printf("2d array of %s\n", array->datatype->datatype->datatype->namestring);
+		//printf("array type: %s\n", array->datatype->datatype->namestring);
 		if(subs->tokentype == IDENTIFIERTOK){
-			printf("creating expression for subscript\n");
-			printf("%d\n", arrtype->size);
+			//printf("creating expression for subscript\n");
+			//printf("%d\n", arrtype->size);
 			//multiple index by size of elements
 			TOKEN times = talloc();
 			times->tokentype = OPERATOR;
@@ -309,7 +329,7 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 			size->intval = arrtype->size;
 			//see if 2d offset needs to be added
 			if(subs->link){
-				printf("add offset for second dimension\n");
+				//printf("add offset for second dimension\n");
 				
 			}
 			newsubs = binop(times, size, subs);
@@ -326,7 +346,7 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 		}	
 		
 		int offset = arrtype->size * (subs->intval - 1);
-		printf("offset = %d\n\n", offset);
+		//printf("offset = %d\n\n", offset);
 		TOKEN aref = talloc();
 		aref->tokentype = OPERATOR;
 		aref->whichval = AREFOP;
@@ -344,10 +364,10 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 	}
 	//1 dimensional
 	else{
-		printf("array type: %s\n", array->datatype->datatype->namestring);
+		//printf("array type: %s\n", array->datatype->datatype->namestring);
 		if(subs->tokentype == IDENTIFIERTOK){
-			printf("creating expression for subscript\n");
-			printf("%d\n", arrtype->size);
+			//printf("creating expression for subscript\n");
+			//printf("%d\n", arrtype->size);
 			//multiple index by size of elements
 			TOKEN times = talloc();
 			times->tokentype = OPERATOR;
@@ -359,7 +379,7 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 			size->intval = arrtype->size;
 			//see if 2d offset needs to be added
 			if(subs->link){
-				printf("add offset for second dimension\n");
+				//printf("add offset for second dimension\n");
 				
 			}
 			newsubs = binop(times, size, subs);
@@ -376,7 +396,7 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
 		}	
 		
 		int offset = arrtype->size * (subs->intval - 1);
-		printf("offset = %d\n\n", offset);
+		//printf("offset = %d\n\n", offset);
 		TOKEN aref = talloc();
 		aref->tokentype = OPERATOR;
 		aref->whichval = AREFOP;
@@ -397,7 +417,7 @@ TOKEN arrayref(TOKEN arr, TOKEN tok, TOKEN subs, TOKEN tokb){
  
  //converts a nil token to a number token with value of 0
 TOKEN convertnil(TOKEN nil){
-	printf("converting nil to 0\n");
+	//printf("converting nil to 0\n");
 	TOKEN zero = talloc();
 	zero->tokentype = NUMBERTOK;
 	zero->datatype = INTEGER;
@@ -408,7 +428,7 @@ TOKEN convertnil(TOKEN nil){
 /* dolabel is the action for a label of the form   <number>: <statement>
    tok is a (now) unused token that is recycled. */
 TOKEN dolabel(TOKEN labeltok, TOKEN tok, TOKEN statement){
-	printf("doing label...\n");
+	//printf("doing label...\n");
 	TOKEN progn = makeprogn(tok, statement);
 	TOKEN label = talloc();
 	label->tokentype = OPERATOR;
@@ -429,16 +449,11 @@ TOKEN dolabel(TOKEN labeltok, TOKEN tok, TOKEN statement){
    dot is a (now) unused token that is recycled. */
 TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 	int prev_not_pointer = 0;					//indicates whether field is a field of var
-	printf("making aref..\n");
-	printf("printing var...\n");
-	printtoken(var);
-	printf("previous field accessed: %s\n", var->symtype->namestring);
-	printf("field: %s\n", field->stringval);
-	printf("field: %s\n", var->symtype->datatype->datatype->datatype->namestring);
+
 	SYMBOL fields = var->symtype->datatype->datatype->datatype;
 	while(fields){
 		if(strcmp(fields->namestring, field->stringval) == 0){
-			printf("previous was NOT a pointer\n");
+			//printf("previous was NOT a pointer\n");
 			prev_not_pointer = 1;
 		}
 		fields = fields->link;
@@ -451,14 +466,14 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 		int offset = 0;
 		//printing out field names
 		while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
-			printf("field: %s\n", ff->namestring);
+			//printf("field: %s\n", ff->namestring);
 			//add padding. this could be avoided if each field in a record recorded it's own offset. I guess i haven't done this
 			offset += ff->size;
 			if((offset % 8 != 0) && (ff->size == 8)){
 				offset += 4;
-				printf("added padding\n");
+				//printf("added padding\n");
 			}
-			printf("offset = %d\n", offset);
+			//printf("offset = %d\n", offset);
 			ff = ff->link;
 		}
 		//link aref to field accessed. useful to multiple dot operators. NOT SURE IF NEEDED HERE.
@@ -474,7 +489,7 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 		record = var->symtype->datatype->datatype->datatype;
 		ff = record->datatype->datatype;										//gets me the symbol for the first field
 		TOKEN aref = talloc();
-		printf("whichval: %d\n", var->whichval);
+		//printf("whichval: %d\n", var->whichval);
 		aref->tokentype = OPERATOR;
 		aref->whichval = AREFOP;
 		aref->operands = var;
@@ -485,14 +500,14 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 		int offset = 0;
 		//printing out field names
 		while(ff && (strcmp(ff->namestring, field->stringval) != 0)){
-			printf("field: %s\n", ff->namestring);
+			//printf("field: %s\n", ff->namestring);
 			//add padding. this could be avoided if each field in a record recorded it's own offset. I guess i haven't done this
 			offset += ff->size;
 			if((offset % 8 != 0) && (ff->size == 8)){
 				offset += 4;
-				printf("added padding\n");
+				//printf("added padding\n");
 			}
-			printf("offset = %d\n", offset);
+			//printf("offset = %d\n", offset);
 			ff = ff->link;
 		}
 		//link aref to field accessed. useful to multiple dot operatos
@@ -501,22 +516,18 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
 		//special case for padding at end
 		if((offset % 8 != 0) && (ff->size == 8)){
 				offset += 4;
-				printf("added padding\n");
+				//printf("added padding\n");
 			}
 			
-		printf("field: %s\n", ff->namestring);
+		//printf("field: %s\n", ff->namestring);
 		
-		printf("aref offset = %d\n\n", offset);
+		//printf("aref offset = %d\n\n", offset);
 		//create number token for offset
 		TOKEN number = talloc();
 		number->tokentype = NUMBERTOK;
 		number->datatype = INTEGER;
 		number->intval = offset;
 		var->link = number;
-	
-	
-
-	
 	
 		return aref;
 	}
@@ -527,16 +538,16 @@ TOKEN reducedot(TOKEN var, TOKEN dot, TOKEN field){
  /* dopoint handles a ^ operator.
    tok is a (now) unused token that is recycled. */
 TOKEN dopoint(TOKEN var, TOKEN tok){
-	printf("\nhandling point...\n\n");
+	//printf("\nhandling point...\n\n");
 	SYMBOL id = searchst(var->stringval);
 	//printf("%d\n", id->datatype->datatype->datatype->size);		//john points to pp, points to person, points to record
-	printf("here\n");
+	//printf("here\n");
 	TOKEN pointer = talloc();
 	pointer->tokentype = OPERATOR;
 	pointer->whichval = POINTEROP;
 	pointer->operands = var;
 	
-	printf("id: %d\n", var->whichval);
+	//printf("id: %d\n", var->whichval);
 	if(var->whichval == AREFOP){
 		//return var;
 		pointer->symtype = var->symtype;
@@ -544,7 +555,7 @@ TOKEN dopoint(TOKEN var, TOKEN tok){
 	}
 	
 	pointer->symtype = id;						//linking pointer to id's symbol in table
-	printf("returning from point.\n");
+	//printf("returning from point.\n");
 	return pointer;
 }
  
@@ -569,7 +580,7 @@ TOKEN instarray(TOKEN bounds, TOKEN typetok){
 	TOKEN second_array;
 	if(bounds->link){
 		//create another array for the next dimension
-		printf("creating second array\n");
+		//printf("creating second array\n");
 		//printf("second bounds are %d .. %d\n", bounds->link->symtype->datatype->lowbound, bounds->link->symtype->datatype->highbound);
 		//these are the correct bounds
 		int high = bounds->link->symtype->datatype->highbound;
@@ -657,14 +668,14 @@ TOKEN makesubrange(TOKEN tok, int low, int high){
  /* instrec will install a record definition.  Each token in the linked list
    argstok has a pointer to its type.*/
 TOKEN instrec(TOKEN rectok, TOKEN argstok){
-	printf("installing record into symbol table...\n");
+	//printf("installing record into symbol table...\n");
 	SYMBOL temptab[50];
 	TOKEN temp = argstok;
 	while(temp){
-		printf("%s: %s, ", temp->stringval, temp->symtype->namestring);
+		//printf("%s: %s, ", temp->stringval, temp->symtype->namestring);
 		temp = temp->link;
 	}
-	printf("\n");
+	//printf("\n");
 	SYMBOL temptable[50];								//hold the symbols temporarily
 	SYMBOL record = makesym("");
 	record->kind = RECORDSYM;
@@ -690,7 +701,7 @@ TOKEN instrec(TOKEN rectok, TOKEN argstok){
 		size += temp->symtype->size;
 		temptab[index] = sym;						//insert so you can link together later
 		temp = temp->link;
-		printf("NAME: %s, DATATYPE: %s, OFFSET: %d, SIZE: %d\n", sym->namestring, sym->datatype->namestring, sym->offset, sym->size);
+		//printf("NAME: %s, DATATYPE: %s, OFFSET: %d, SIZE: %d\n", sym->namestring, sym->datatype->namestring, sym->offset, sym->size);
 		index++;
 	}
 	
@@ -699,20 +710,10 @@ TOKEN instrec(TOKEN rectok, TOKEN argstok){
 		temptab[i]->link = temptab[i+1];
 	}
 	
-
-	
 	record->datatype = first;
 	record->size = size;
-	
-	printf("KIND: %d, DATATYPE: %s, SIZE: %d\n", record->kind, record->datatype->namestring, record->size);
-	printf("first = %s\n", record->datatype->namestring);
-	
-	
-	
-	
+
 	rectok->symtype = record;			//ie. "complex" datatype will point to this RECORDSYM
-	printf("first = %s\n", rectok->symtype->datatype->namestring);
-	printf("\n");
 	return rectok;
 }
 
@@ -739,58 +740,49 @@ TOKEN instfields(TOKEN idlist, TOKEN typetok){
  /* insttype will install a type name in symbol table.
    typetok is a token containing symbol table pointers. */
 void  insttype(TOKEN typename, TOKEN typetok){
-	printf("installing %s into symbol table...\n", typename->stringval);
-	printf("previous entry for %s...?", typename->stringval);
 	//printf("name: %s\n", typetok->symtype->datatype->namestring);
 	SYMBOL temp = searchst(typename->stringval);
 	if(temp){
-		printf(" yes!\n");
+		//printf(" yes!\n");
 		temp->kind = TYPESYM;
 		temp->datatype = typetok->symtype;
 		temp->size = typetok->symtype->size;
 		temp->basicdt = typetok->symtype->basicdt;
 	}
 	else{
-		printf(" no\n");
+		//printf(" no\n");
 	
-	//make a symbol for typename. Datatype for sym = typetok->symtype
-	SYMBOL typesym = insertsym(typename->stringval);
-	typesym->kind = TYPESYM;
-	typesym->datatype = typetok->symtype;
-	typesym->size = typetok->symtype->size;
-	typesym->basicdt = typetok->symtype->basicdt;
+		//make a symbol for typename. Datatype for sym = typetok->symtype
+		SYMBOL typesym = insertsym(typename->stringval);
+		typesym->kind = TYPESYM;
+		typesym->datatype = typetok->symtype;
+		typesym->size = typetok->symtype->size;
+		typesym->basicdt = typetok->symtype->basicdt;
 	
 	}
-	//printf("%s\n", typetok->symtype->datatype->namestring);
-
-	printf("\n\n");
-	
-	
-	
-
 
 }
  
  /* instlabel installs a user label into the label table */
 void  instlabel (TOKEN num){
-	printf("installing label...\n");
+	//printf("installing label...\n");
 	//install into label table. Index into table is the internal label
 	labels[labelnumber++] = num->intval;
 	int i = 0;
 	for(; i < labelnumber; i++){
-		printf("%d\n", labels[i]);
+		//printf("%d\n", labels[i]);
 	}
 }
 
 /* findtype looks up a type name in the symbol table, puts the pointer
    to its type into tok->symtype, returns tok. */
 TOKEN findtype(TOKEN tok){
-	printf("linking %s to it's type...\n", tok->stringval);
+	//printf("linking %s to it's type...\n", tok->stringval);
 	SYMBOL stype = searchst(tok->stringval);
 	tok->symtype = stype;
 	//if stype is null then the type isn't a basic type or it hasn't been entered into symbol table yet
-	printf("%s\n", tok->symtype->namestring);
-	printf("high: %d, low: %d\n", stype->highbound, stype->lowbound);
+	//printf("%s\n", tok->symtype->namestring);
+	//printf("high: %d, low: %d\n", stype->highbound, stype->lowbound);
 	return tok;
 }
  
@@ -881,7 +873,7 @@ void  instconst(TOKEN idtok, TOKEN consttok){
 	}
 	//printsymbol(typesym);
 	align = alignsize(typesym);
-	printf("align = %d\n", align);
+	//printf("align = %d\n", align);
 	
 	sym = insertsym(idtok->stringval);
 	sym->kind = CONSTSYM;
@@ -914,19 +906,9 @@ TOKEN processProgram(TOKEN tok1, TOKEN tok2, TOKEN tok3, TOKEN tok4, TOKEN tok5)
    typetok is a token containing symbol table pointer for type. */
 void  instvars(TOKEN idlist, TOKEN typetok){
 
-	//need to link typetok to its symbol in table
-	
-
-	printf("\ninstalling vars...\n");
+	//printf("\ninstalling vars...\n");
 	SYMBOL sym, typesym; int align;
 	typesym = typetok->symtype;				//original
-	//typesym = searchst(typetok->stringval);		//my temp fix. Dont believe I need this anymore. Working correctly now.
-	printf("type name is %s\n", typetok->stringval);
-	printf("basicdt = %d\n", typetok->datatype);
-	printf("typesym basicdt = %d\n", typesym->basicdt);
-	printf("symtype = %s\n", typetok->symtype->namestring);
-	if(typesym->datatype)
-		printf("symtype size = %d\n\n", typesym->datatype->datatype->size);
 	align = alignsize(typesym);
 	//for each id
 	while(idlist != NULL){ 		
@@ -966,7 +948,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 	func->link = NULL;
 	
 	if(strcmp(fn->stringval, "new") == 0){
-		printf("making new function...\n");
+		//printf("making new function...\n");
 		//create number token for size of allocated memory
 		TOKEN size = copytoken(tok);
 		size->tokentype = NUMBERTOK;
@@ -975,8 +957,8 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 		size->operands = NULL;
 		size->link = NULL;
 		size->intval = searchst(args->stringval)->datatype->datatype->datatype->size;
-		printf("%s\n", args->stringval);
-		printf("%d\n", searchst(args->stringval)->datatype->datatype->datatype->size);		//first dt points to pp, next points to person pointer, next points to person??
+		//printf("%s\n", args->stringval);
+		//printf("%d\n", searchst(args->stringval)->datatype->datatype->datatype->size);		//first dt points to pp, next points to person pointer, next points to person??
 		fn->link = size;
 		func->operands = fn;
 		//create an assignop. operand is fn...
@@ -989,16 +971,45 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 	}
 	
 	else{
+		SYMBOL writelni = searchst("writelni");
+		//printf("kind: %d\n", writelni->kind);
+		SYMBOL writelnf = searchst("writelnf");
+		//printf("kind: %d\n", writelnf->kind);
+		int flag = 0;
+		if(!(strcmp(fn->stringval, "writeln")) || !(strcmp(fn->stringval, "write")))
+			flag = 1;
+		
+		//printf("argument type %d\n", args->tokentype);
 		fn->link = args;
 		func->operands = fn;
-		
+		if(args->tokentype == 3 && flag)
+			strcpy(fn->stringval, "writelni");
+		if(args->tokentype == 0 && flag)
+			strcpy(fn->stringval, "writelnf");
+
 		//search symbol table for function. Need to check if arguments need to be coerced
 		SYMBOL func_symbol = searchst(fn->stringval);
 		int return_type = func_symbol->datatype->basicdt;
 		int arg_type = func_symbol->datatype->link->basicdt;
-		printf("\n\nfunction name is %s\n", fn->stringval);
-		printf("function return type = %d\n", return_type);
-		printf("function argument type = %d\n\n", arg_type);
+		//printf("\n\nfunction name is %s\n", fn->stringval);
+		//printf("function return type = %d\n", return_type);
+		//printf("function argument type = %d\n\n", arg_type);
+		TOKEN temp = args->operands;
+		if(temp){
+			while(temp->link){
+			//printf("argument type: %d\n", temp->datatype);
+			if(temp->datatype != arg_type && !flag){
+				int old = temp->intval;
+				temp->datatype = arg_type;
+				temp->realval = old;
+			}
+				
+			temp = temp->link;
+			}
+		}
+		
+		
+		
 	}
 
 	return func;
@@ -1110,7 +1121,7 @@ TOKEN nconc(TOKEN lista, TOKEN listb){
 	   
 TOKEN cons(TOKEN item, TOKEN list)           /* add item to front of list */
   { item->link = list;
-	printf("linking.\n");
+	//printf("linking.\n");
     if (DEBUG & DB_CONS)
        { printf("cons\n");
          dbugprinttok(item);
@@ -1121,7 +1132,7 @@ TOKEN cons(TOKEN item, TOKEN list)           /* add item to front of list */
 
 TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
   { 
-	printf("inside binop...\n");
+	//printf("inside binop...\n");
 	
 	op->operands = lhs;          /* link operands to operator       */
     lhs->link = rhs;             /* link second operand to first    */
@@ -1129,42 +1140,36 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 	TOKEN op_copy = copytoken(op);
 	
 	//getting type of second argument
-	SYMBOL second = searchst(rhs->stringval);
+	/* SYMBOL second = searchst(rhs->stringval);
 	if(second != NULL)
-		//printf("rhs datatype = %d\n\n", second->basicdt);
-	
-	//UNCOMMENT THIS BLOCK BEFORE RUNNING GRAPH1.PAS. TEMPORARILY COMMENTED OUT TO REMOVE ALL COERCION
-	/* //need to coerce integer to float.
-	if((second != NULL) && (lhs->datatype != second->basicdt) && (rhs->datatype != STRINGTYPE) && (lhs->whichval != 25)){		//hardcoded special case for arefop. Should not do this!!!
-		//coerce lhs to float
-		if(lhs->datatype == INTEGER){
-			//printf("coercing...\n");
-			//printf("lhs %d\n", lhs->whichval);
-			op_copy->whichval = FLOATOP;
-			op_copy->operands = lhs;
-			lhs->link = NULL;
-			op_copy->link = rhs;
-			op->operands = op_copy;
-			
+		printf("rhs datatype = %d\n\n", second->basicdt); */
+	SYMBOL lhsSYM = lhs->symtype;
+	SYMBOL rhsSYM = rhs->symtype;
+	if(lhsSYM){
+		if((strcmp(lhsSYM->namestring, "location") == 0) && rhs->datatype == INTEGER ){
+			//coerce to float
+			int old = rhs->intval;
+			rhs->datatype = REAL;
+			rhs->realval = old;
 		}
-		//coerce rhs to float
-		else if(rhs->datatype == INTEGER){
-			op_copy->whichval = FLOATOP;
+	}
+	if(rhsSYM){
+		//while(rhsSYM->datatype)
+			//rhsSYM = rhsSYM->datatype;
+		//printf("rhs type: %s\n", rhsSYM->namestring);
+	}
+	
+	int arg1type = lhs->datatype;
+	int arg2type = rhs->datatype;
+	//printf("inside binop\n");
+	//printf("arg1 datatype: %d, argd datatype: %d\n", arg1type, arg2type);
+	if(arg1type == 1 && arg2type == 0 && !strcmp(rhs->stringval, "i")){
+		op_copy->whichval = FLOATOP;
 			op_copy->operands = rhs;
 			op_copy->link = NULL;
 			lhs->link = op_copy;
-		}
 	}
 	
-	//lhs is an aref
-	if(lhs->whichval == 25 && op->whichval == ASSIGNOP){
-		//printf("\ninside binop...\n");
-		//printf("%s\n", lhs->symtype->datatype->namestring);
-		//SYMBOL type = searchst(lhs->symtype->datatype->namestring);		
-		//printf("%s\n", type->datatype->datatype->namestring);
-		//printf("%d\n", type->datatype->datatype->datatype->datatype->datatype->basicdt);
-		//printf("could coerce\n");
-	}  */
 	
     if (DEBUG & DB_BINOP)
        { printf("binop\n");
@@ -1174,7 +1179,7 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
        };
 	   
 
-	printf("here\n");
+	//printf("here\n");
     return op;
   }
   
@@ -1199,6 +1204,7 @@ TOKEN makeif(TOKEN tok, TOKEN exp, TOKEN thenpart, TOKEN elsepart)
           dbugprinttok(thenpart);
           dbugprinttok(elsepart);
         };
+	//printf("in makeif\n");
      return tok;
    }
 
