@@ -1050,7 +1050,7 @@ TOKEN makefor(int sign, TOKEN tok, TOKEN asg, TOKEN tokb, TOKEN endexpr,
 	//creating assignment statement
 	TOKEN lteop = talloc();
 	lteop->tokentype = OPERATOR;
-	lteop->datatype = STRINGTYPE;
+	lteop->datatype = INTEGER;					//(was stringtype) this needs to be of whatever type it's comparing
 	lteop->whichval = LEOP;
 	unaryop(ifop, lteop);
 	//add operands to LEOP

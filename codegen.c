@@ -28,7 +28,14 @@
 #include "genasm.h"
 #include "codegen.h"
 
+#define NUM_I_REGS 4
+
 void genc(TOKEN code);
+void unmark_iregs();
+
+int c_to_jmp[12] = {0, 0, 0, 0, 0, 0, JE, JNE, JL, JLE, JGE, JG};
+//0 indicates register unused. EAX, ECX, EDX, EBX
+int int_regs[4] = {0, 0, 0, 0};
 
 /* Set DEBUGGEN to 1 for debug printouts of code generation */
 #define DEBUGGEN 0
@@ -62,6 +69,18 @@ void gencode(TOKEN pcode, int varsize, int maxlabel)
 /* Need a type parameter or two versions for INTEGER or REAL */
 int getreg(int kind)
   {
+	int index = 0;
+	//IS WORD USED FOR INTEGER, DOUBLE CHECK
+	if(kind == WORD){
+		while(int_regs[index] == 1)
+			index++;
+		int_regs[index] = 1;
+		return index;
+	}
+	
+	else if(kind == REAL){
+		printf("NEED TO IMPLEMENT GETREG() FOR REAL PARAMETER\n");
+	}
     /*     ***** fix this *****   */
      return RBASE;
   }
@@ -69,34 +88,35 @@ int getreg(int kind)
 /* Trivial version */
 /* Generate code for arithmetic expression, return a register number */
 int genarith(TOKEN code)
-  {   int num, reg;
+  {   
+  int num, reg;
      if (DEBUGGEN)
        { printf("genarith\n");
 	 dbugprinttok(code);
        };
-      switch ( code->tokentype )
-       { case NUMBERTOK:
-           switch (code->datatype)
-             { case INTEGER:
-		 num = code->intval;
-		 reg = getreg(WORD);
-		 if ( num >= MINIMMEDIATE && num <= MAXIMMEDIATE )
-		   asmimmed(MOVL, num, reg);
-		 break;
-	       case REAL:
-    /*     ***** fix this *****   */
-		 break;
-	       }
-	   break;
-       case IDENTIFIERTOK:
-    /*     ***** fix this *****   */
-	   break;
-       case OPERATOR:
-    /*     ***** fix this *****   */
-	   break;
-       };
-     return reg;
-    }
+	switch ( code->tokentype ){ 
+		case NUMBERTOK:
+			switch (code->datatype){ 
+				case INTEGER:
+					num = code->intval;
+					reg = getreg(WORD);
+					if ( num >= MINIMMEDIATE && num <= MAXIMMEDIATE )
+						asmimmed(MOVL, num, reg);
+					break;
+				case REAL:
+				/*     ***** fix this *****   */
+					break;
+			}
+			break;
+		case IDENTIFIERTOK:
+			/*     ***** fix this *****   */	
+			break;
+		case OPERATOR:
+			/*     ***** fix this *****   */
+			break;
+	};
+	return reg;
+}
 
 
 /* Generate code for a Statement from an intermediate-code form */
@@ -133,5 +153,45 @@ void genc(TOKEN code)
                  /* ...  */
              };
            break;
+	case LABELOP:
+		asmlabel(code->operands->intval);
+		break;
+	
+	case IFOP:
+		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
+		genc(code->operands);
+		int op = code->operands->whichval;
+		int thenlabel = nextlabel++;
+		int elselabel = nextlabel++;
+		asmjump(c_to_jmp[op], thenlabel);
+		asmjump(JMP, elselabel);
+		//then label
+		asmlabel(thenlabel);
+		genc(code->operands->link);
+		//else label
+		asmlabel(elselabel);
+		break;
+		
+	case LEOP:
+		lhs = code->operands;
+		rhs = lhs->link;
+		reg = genarith(rhs);
+		sym = lhs->symentry;
+		offs = sym->offset - stkframesize;
+		switch(code->datatype){
+			case INTEGER:
+				reg = getreg(WORD);
+				asmld(MOVL, offs, getreg(WORD), lhs->stringval);
+				break;
+		};
+		break;
 	 };
+	
   }
+
+//unmarks all integer regs. Use at beginning of statement.  
+void unmark_iregs(){
+	int i;
+	for(i = 0; i < NUM_I_REGS; i++)
+		int_regs[i] = 0;
+}
