@@ -51,6 +51,8 @@
 #include "lexan.h"
 #include "symtab.h"
 #include "parse.h"
+#include "codegen.h"
+
 
         /* define the type of the Yacc stack element to be TOKEN */
 
@@ -791,6 +793,7 @@ TOKEN findtype(TOKEN tok){
 TOKEN findid(TOKEN tok){
 	SYMBOL result = searchst(tok->stringval);
 	TOKEN constant_val = copytoken(tok);
+	printf("looking for %s in symbol table\n", tok->stringval);
 	//if id is in symbol table and 
 	if((result != NULL) && (result->kind == CONSTSYM)){
 		//printf("found constant variable in symbol table. need to replace with actual value\n\n");
@@ -809,6 +812,10 @@ TOKEN findid(TOKEN tok){
 			//printf("constant_value = %f\n\n", constant_val->realval);
 		}
 		return constant_val;
+	}
+	//not a constant but fill in symentry for id
+	else if(result){
+		tok->symentry = result;
 	}
 	return tok;
 	
@@ -1231,6 +1238,7 @@ yyerror(s)
   fputs(s,stderr); putc('\n',stderr);
   }
 
+  
 main()
   { int res;
     initsyms();
@@ -1238,5 +1246,7 @@ main()
     printst();
     printf("yyparse result = %8d\n", res);
     if (DEBUG & DB_PARSERES) dbugprinttok(parseresult);
-    ppexpr(parseresult);           /* Pretty-print the result tree */
+		ppexpr(parseresult);           /* Pretty-print the result tree */
+		
+	gencode(parseresult, blockoffs[blocknumber], labelnumber);								//added for code generator
   }
