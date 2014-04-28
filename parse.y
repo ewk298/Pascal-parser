@@ -188,13 +188,13 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
 			 ;
 			 
   expr       : IDENTIFIER LT NUMBER				{$$ = binop($2, $1, $3);}
-  			 | IDENTIFIER EQ expr				{$$ = binop($2, $1, $3);}
+  			 | IDENTIFIER EQ expr				{findid($1); $$ = binop($2, $1, $3);}
 			 | expr PLUS term                 { $$ = binop($2, $1, $3); }
 			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
 			 | MINUS factor						{$$ = unaryop($1, $2);}
 			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
 			 | term NE term						{$$ = binop($2, $1, $3);} 
-			 | STRING
+			 | STRING							{printf("%d\n", $1->datatype);}
              |  term 
 			 | factor
              ;
@@ -1019,7 +1019,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 		
 		func->symentry = func_symbol;
 	}
-
+	printf("args datatype: %d\n", args->datatype);
 	return func;
 }
 

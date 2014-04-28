@@ -35,6 +35,7 @@ void genc(TOKEN code);
 void unmark_iregs();
 void unmark_fregs();
 void print_iregs();
+void print_fregs();
 
 int c_to_jmp[12] = {0, 0, 0, 0, 0, 0, JE, JNE, JL, JLE, JGE, JG};
 //0 indicates register unused. EAX, ECX, EDX, EBX
@@ -99,6 +100,7 @@ int genarith(TOKEN code)
   {   
 	//printf("code tokentype: %d\n", code->tokentype);
 	int num, reg, reg2, offs, labelnum;	
+	int flag = 0;
 	SYMBOL sym;
 	double realnum;
 	TOKEN lhs, rhs;
@@ -126,13 +128,31 @@ int genarith(TOKEN code)
 					break;
 			}
 			break;
+			
+		case STRINGTOK:
+			//printf("processing stringtype\n");
+			//printf("d%sd\n", code->stringval);
+			labelnum = nextlabel++;
+			makeblit(code->stringval, labelnum);
+			asmlitarg(labelnum, EDI);
+			reg = EDI;
+			break;
+		
 		case IDENTIFIERTOK:
-			/*     ***** fix this *****   */	
+			/*     ***** fix this *****   */
+			//printf("processing id\n");
+			sym = code->symentry;
+			//printf("sym basicdt: %d\n", sym->basicdt);
+			offs = sym->offset - stkframesize;
+			if(sym->basicdt == 0)
+				reg = getreg(WORD);
+			else if(sym->basicdt == 1)
+				reg = getreg(FLOAT);
+			//assumes real type for now
+			asmld(MOVSD, offs, reg, code->stringval);
 			break;
 		case OPERATOR:
 			/*     ***** fix this *****   */
-			//genc(code);
-			//printf("code whichval: %d\n", code->whichval);
 			switch(code->whichval){
 				case FLOATOP:
 					//printf("processing float\n");
@@ -147,8 +167,8 @@ int genarith(TOKEN code)
 					break;
 					
 				case TIMESOP:
-					unmark_iregs();
-					unmark_fregs();
+					//unmark_iregs();
+					//unmark_fregs();
 					//printf("process timesop\n");
 					lhs = code->operands;
 					//printf("%d\n", lhs == NULL);
@@ -156,12 +176,55 @@ int genarith(TOKEN code)
 					//printf("%d\n", rhs == NULL);
 					reg = genarith(lhs);
 					reg2 = genarith(rhs);
+					//lhs and rhs were both functions that returned a real
+					if(reg == FBASE && reg2 == FBASE){
+						reg = FBASE + 1;		//xmm1
+						reg2 = FBASE;			//xmm0
+					}
+					//lhs and rhs were both functions that returned an integer
+					else if(reg == RBASE && reg2 == RBASE){
+					
+					}
+					
 					asmrr(MULSD, reg2, reg);
+					break;
+					
+				case MINUSOP:
+					//printf("minusop\n");
+					//unmark_iregs();
+					//unmark_fregs();
+					lhs = code->operands;
+					rhs = lhs->link;
+					reg = genarith(lhs);
+					//binary minus
+					if(rhs){
+						reg2 = genarith(rhs);
+						/* finish this !!! */
+						asmrr(SUBL, reg2, reg);
+					}
+					//unary minus
+					else{
+						reg2 = getreg(FLOAT);
+						asmfneg(reg, reg2);
+					}
+					//reg is returned after break. Is contents of reg correct.
+					break;
+					
+				case PLUSOP:
+					//printf("processing plusop\n");
+					//print_iregs();
+					lhs = code->operands;
+					rhs = lhs->link;
+					reg = genarith(lhs);
+					//print_iregs();
+					reg2 = genarith(rhs);
+					//assuming real for now
+					asmrr(ADDSD, reg2, reg);
 					break;
 				
 				case LEOP:
-					unmark_iregs();
-					unmark_fregs();
+					//unmark_iregs();
+					//unmark_fregs();
 					lhs = code->operands;
 					rhs = lhs->link;
 					sym = lhs->symentry;
@@ -178,12 +241,64 @@ int genarith(TOKEN code)
 					reg = reg2;
 					break;
 					
+				case EQOP:
+					//printf("processing eqop\n");
+					lhs = code->operands;
+					rhs = lhs->link;
+					sym = lhs->symentry;
+					
+					offs = sym->offset - stkframesize;
+					
+					switch(code->datatype){
+						case INTEGER:
+							reg = getreg(WORD);
+							asmld(MOVL, offs, reg, lhs->stringval);
+							break;
+					};
+					reg2 = genarith(rhs);
+					asmrr(CMPL, reg2, reg);
+					reg = reg2;
+					break;	
+					
 				case FUNCALLOP:
-					printf("generating for funcall\n");
+					//printf("generating for funcall\n");
+					//print_fregs();
+					1 == 1;		//can't have these assignments right after label. doing this for now
 					int return_type = code->symentry->datatype->basicdt;
 					int args_type = code->symentry->datatype->link->datatype->basicdt;
+					//see if xmm0 should be saved
+					if(f_regs[0] == 1 && args_type == 1){
+						asmsttemp(FBASE);		//store xmm0 onto stack
+						flag = 1;
+						f_regs[0] = 0;			//mark unused
+					}
+					unmark_iregs();
+					unmark_fregs();
+					//printf("%s\n", code->symentry->namestring);
 					//printf("return type: %d\n", code->symentry->datatype->basicdt);	//return type
 					//printf("arguments type: %d\n", code->symentry->datatype->link->datatype->basicdt);	//arguments type
+					//printf("%d\n", code->operands->link->tokentype);
+					reg = genarith(code->operands->link);					//function parameters
+					
+					//integer arguments go into edi
+					if(reg == RBASE)
+						asmrr(MOVL, RBASE, EDI);
+						
+					asmcall(code->symentry->namestring);
+					if(return_type == 0){
+						reg = RBASE;
+						int_regs[EAX] = 1;
+					}
+					else if(return_type == 1){
+						reg = FBASE;
+						//should I set f_reg here?
+					}
+					
+					//restore xmm0 from stack into xmm1. xmm0 holds this instances return value from a function
+					if(flag == 1){
+						asmldtemp(FBASE + 1);
+						f_regs[FBASE + 1] = 1;
+					}
 					
 					break;
 			};
@@ -206,8 +321,9 @@ void genc(TOKEN code)
 	  dbugprinttok(code);
 	};
 	
-	/* unmark_iregs();
-	unmark_fregs(); */
+	unmark_iregs();
+	unmark_fregs();
+	
      switch ( code->whichval )
        { case PROGNOP:
 	   tok = code->operands;
@@ -217,8 +333,8 @@ void genc(TOKEN code)
 	      };
 	   break;
 	 case ASSIGNOP:                   /* Trivial version: handles I := e */
-		unmark_iregs();
-		unmark_fregs();
+		//unmark_iregs();
+		//unmark_fregs();
 	   lhs = code->operands;
 	   rhs = lhs->link;
 	   reg = genarith(rhs);              /* generate rhs into a register */
@@ -241,8 +357,8 @@ void genc(TOKEN code)
 		break;
 	
 	case IFOP:
-		unmark_iregs();
-		unmark_fregs();
+		//unmark_iregs();
+		//unmark_fregs();
 		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
 		genarith(code->operands);
 		int op = code->operands->whichval;
@@ -256,7 +372,16 @@ void genc(TOKEN code)
 		//else label
 		asmlabel(elselabel);
 		break;
+		
+	case FUNCALLOP:
+		//printf("processing funcall\n");
+		//printf("tokentype: %d\n", code->operands->link->tokentype);
+		reg = genarith(code->operands->link);					//function parameters
+		asmcall(code->symentry->namestring);
+		break;
 	 };
+	 
+	 
 	
   }
 
@@ -267,6 +392,16 @@ void print_iregs(){
 	}
 	printf("\n");
 }
+
+void print_fregs(){
+	int i = 0; 
+	for(; i < NUM_F_REGS; i++){
+		printf("%d, ", f_regs[i]);
+	}
+	printf("\n");
+}
+
+
   
 //unmarks all integer regs. Use at beginning of statement.  
 void unmark_iregs(){
