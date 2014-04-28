@@ -112,6 +112,7 @@ int genarith(TOKEN code)
 		case NUMBERTOK:
 			switch (code->datatype){ 
 				case INTEGER:
+					//printf("processing integer\n");
 					num = code->intval;
 					reg = getreg(WORD);
 					if ( num >= MINIMMEDIATE && num <= MAXIMMEDIATE )
@@ -144,12 +145,14 @@ int genarith(TOKEN code)
 			sym = code->symentry;
 			//printf("sym basicdt: %d\n", sym->basicdt);
 			offs = sym->offset - stkframesize;
-			if(sym->basicdt == 0)
+			if(sym->basicdt == 0){
 				reg = getreg(WORD);
-			else if(sym->basicdt == 1)
+				asmld(MOVL, offs, reg, code->stringval);
+			}
+			else if(sym->basicdt == 1){
 				reg = getreg(FLOAT);
-			//assumes real type for now
-			asmld(MOVSD, offs, reg, code->stringval);
+				asmld(MOVSD, offs, reg, code->stringval);
+			}
 			break;
 		case OPERATOR:
 			/*     ***** fix this *****   */
@@ -215,11 +218,14 @@ int genarith(TOKEN code)
 					//print_iregs();
 					lhs = code->operands;
 					rhs = lhs->link;
+					
 					reg = genarith(lhs);
 					//print_iregs();
 					reg2 = genarith(rhs);
-					//assuming real for now
-					asmrr(ADDSD, reg2, reg);
+					//assuming integer
+					//printf("%d\n", lhs->datatype);
+					//printf("%d\n", rhs->datatype);
+					asmrr(ADDL, reg2, reg);
 					break;
 				
 				case LEOP:
@@ -360,6 +366,7 @@ void genc(TOKEN code)
 		//unmark_iregs();
 		//unmark_fregs();
 		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
+		printf("%d\n", code->operands->whichval);
 		genarith(code->operands);
 		int op = code->operands->whichval;
 		int thenlabel = nextlabel++;
@@ -379,7 +386,15 @@ void genc(TOKEN code)
 		reg = genarith(code->operands->link);					//function parameters
 		asmcall(code->symentry->namestring);
 		break;
+
+	case GOTOOP:
+		printf("processing goto\n");
+		asmjump(JMP, code->operands->intval);
+		break;
+
 	 };
+
+
 	 
 	 
 	
