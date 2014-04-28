@@ -816,6 +816,7 @@ TOKEN findid(TOKEN tok){
 	//not a constant but fill in symentry for id
 	else if(result){
 		tok->symentry = result;
+		tok->datatype = result->basicdt;
 	}
 	return tok;
 	
@@ -1016,7 +1017,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 		}
 		
 		
-		
+		func->symentry = func_symbol;
 	}
 
 	return func;
@@ -1144,6 +1145,7 @@ TOKEN binop(TOKEN op, TOKEN lhs, TOKEN rhs)        /* reduce binary operator */
 	op->operands = lhs;          /* link operands to operator       */
     lhs->link = rhs;             /* link second operand to first    */
     rhs->link = NULL;            /* terminate operand list          */
+	op->datatype = lhs->datatype;			//rhs will be coerced to whatever lhs is
 	TOKEN op_copy = copytoken(op);
 	
 	//getting type of second argument

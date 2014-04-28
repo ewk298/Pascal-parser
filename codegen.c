@@ -147,10 +147,46 @@ int genarith(TOKEN code)
 					break;
 					
 				case TIMESOP:
-					genc(code);
+					unmark_iregs();
+					unmark_fregs();
+					//printf("process timesop\n");
+					lhs = code->operands;
+					//printf("%d\n", lhs == NULL);
+					rhs = lhs->link;
+					//printf("%d\n", rhs == NULL);
+					reg = genarith(lhs);
+					reg2 = genarith(rhs);
+					asmrr(MULSD, reg2, reg);
 					break;
-			}
-			break;
+				
+				case LEOP:
+					unmark_iregs();
+					unmark_fregs();
+					lhs = code->operands;
+					rhs = lhs->link;
+					sym = lhs->symentry;
+					offs = sym->offset - stkframesize;
+					switch(code->datatype){
+						case INTEGER:
+							reg = getreg(WORD);
+							asmld(MOVL, offs, reg, lhs->stringval);
+							break;
+					};
+					reg2 = genarith(rhs);		//have rhs after lhs
+					//generating compare
+					asmrr(CMPL, reg2, reg);
+					reg = reg2;
+					break;
+					
+				case FUNCALLOP:
+					printf("generating for funcall\n");
+					int return_type = code->symentry->datatype->basicdt;
+					int args_type = code->symentry->datatype->link->datatype->basicdt;
+					//printf("return type: %d\n", code->symentry->datatype->basicdt);	//return type
+					//printf("arguments type: %d\n", code->symentry->datatype->link->datatype->basicdt);	//arguments type
+					
+					break;
+			};
 	};
 	return reg;
 }
@@ -188,11 +224,16 @@ void genc(TOKEN code)
 	   reg = genarith(rhs);              /* generate rhs into a register */
 	   sym = lhs->symentry;              /* assumes lhs is a simple var  */
 	   offs = sym->offset - stkframesize; /* net offset of the var   */
+	   //printf("assign datatype: %d\n", code->datatype);
+	   //printf("lhs datatype: %d\n", lhs->datatype);
            switch (code->datatype)            /* store value into lhs  */
              { case INTEGER:
                  asmst(MOVL, reg, offs, lhs->stringval);
                  break;
                  /* ...  */
+				case REAL:
+					asmst(MOVSD, reg, offs, lhs->stringval);
+					break;
              };
            break;
 	case LABELOP:
@@ -203,7 +244,7 @@ void genc(TOKEN code)
 		unmark_iregs();
 		unmark_fregs();
 		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
-		genc(code->operands);
+		genarith(code->operands);
 		int op = code->operands->whichval;
 		int thenlabel = nextlabel++;
 		int elselabel = nextlabel++;
@@ -215,49 +256,6 @@ void genc(TOKEN code)
 		//else label
 		asmlabel(elselabel);
 		break;
-		
-	case LEOP:
-		unmark_iregs();
-		unmark_fregs();
-		lhs = code->operands;
-		rhs = lhs->link;
-		sym = lhs->symentry;
-		offs = sym->offset - stkframesize;
-		switch(code->datatype){
-			case INTEGER:
-				reg = getreg(WORD);
-				asmld(MOVL, offs, reg, lhs->stringval);
-				break;
-		};
-		reg2 = genarith(rhs);		//have rhs after lhs
-		//generating compare
-		asmrr(CMPL, reg2, reg);
-		break;
-		
-	case TIMESOP:
-		unmark_iregs();
-		unmark_fregs();
-		//printf("process timesop\n");
-		lhs = code->operands;
-		//printf("%d\n", lhs == NULL);
-		rhs = lhs->link;
-		//printf("%d\n", rhs == NULL);
-		reg = genarith(lhs);
-		reg2 = genarith(rhs);
-		asmrr(MULSD, reg2, reg);
-		break;
-	
-	case FLOATOP:
-		//printf("processing floatop\n");
-		lhs = code->operands;
-		reg = getreg(WORD);
-		sym = lhs->symentry;
-		offs = sym->offset - stkframesize;
-		asmld(MOVL, offs, reg, lhs->stringval);
-		asmfloat(reg, getreg(FLOAT));
-		asmsttemp(reg);
-		break;
-		
 	 };
 	
   }
