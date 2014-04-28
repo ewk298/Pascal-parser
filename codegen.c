@@ -29,13 +29,18 @@
 #include "codegen.h"
 
 #define NUM_I_REGS 4
+#define NUM_F_REGS 16
 
 void genc(TOKEN code);
 void unmark_iregs();
+void unmark_fregs();
+void print_iregs();
 
 int c_to_jmp[12] = {0, 0, 0, 0, 0, 0, JE, JNE, JL, JLE, JGE, JG};
 //0 indicates register unused. EAX, ECX, EDX, EBX
 int int_regs[4] = {0, 0, 0, 0};
+//0 indicates register unused. xmm0 - xmm15
+int f_regs[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 /* Set DEBUGGEN to 1 for debug printouts of code generation */
 #define DEBUGGEN 0
@@ -78,8 +83,11 @@ int getreg(int kind)
 		return index;
 	}
 	
-	else if(kind == REAL){
-		printf("NEED TO IMPLEMENT GETREG() FOR REAL PARAMETER\n");
+	else if(kind == FLOAT){
+		while(f_regs[index] == 1)
+			index++;
+		f_regs[index] = 1;
+		return index + FBASE;
 	}
     /*     ***** fix this *****   */
      return RBASE;
@@ -89,7 +97,11 @@ int getreg(int kind)
 /* Generate code for arithmetic expression, return a register number */
 int genarith(TOKEN code)
   {   
-  int num, reg;
+	//printf("code tokentype: %d\n", code->tokentype);
+	int num, reg, reg2, offs, labelnum;	
+	SYMBOL sym;
+	double realnum;
+	TOKEN lhs, rhs;
      if (DEBUGGEN)
        { printf("genarith\n");
 	 dbugprinttok(code);
@@ -105,6 +117,12 @@ int genarith(TOKEN code)
 					break;
 				case REAL:
 				/*     ***** fix this *****   */
+					realnum = code->realval;
+					labelnum = nextlabel++;
+					makeflit(realnum, labelnum);
+					reg = getreg(FLOAT);
+					if(num >= MINIMMEDIATE && num <= MAXIMMEDIATE)
+						asmldflit(MOVSD, labelnum, reg);
 					break;
 			}
 			break;
@@ -113,6 +131,25 @@ int genarith(TOKEN code)
 			break;
 		case OPERATOR:
 			/*     ***** fix this *****   */
+			//genc(code);
+			//printf("code whichval: %d\n", code->whichval);
+			switch(code->whichval){
+				case FLOATOP:
+					//printf("processing float\n");
+					lhs = code->operands;
+					reg = getreg(WORD);
+					sym = lhs->symentry;
+					offs = sym->offset - stkframesize;
+					asmld(MOVL, offs, reg, lhs->stringval);
+					reg2 = getreg(FLOAT);
+					asmfloat(reg, reg2);
+					reg = reg2;
+					break;
+					
+				case TIMESOP:
+					genc(code);
+					break;
+			}
 			break;
 	};
 	return reg;
@@ -122,7 +159,7 @@ int genarith(TOKEN code)
 /* Generate code for a Statement from an intermediate-code form */
 void genc(TOKEN code)
   {  TOKEN tok, lhs, rhs;
-     int reg, offs;
+     int reg, reg2, offs;
      SYMBOL sym;
      if (DEBUGGEN)
        { printf("genc\n");
@@ -132,6 +169,9 @@ void genc(TOKEN code)
         { printf("Bad code token");
 	  dbugprinttok(code);
 	};
+	
+	/* unmark_iregs();
+	unmark_fregs(); */
      switch ( code->whichval )
        { case PROGNOP:
 	   tok = code->operands;
@@ -141,6 +181,8 @@ void genc(TOKEN code)
 	      };
 	   break;
 	 case ASSIGNOP:                   /* Trivial version: handles I := e */
+		unmark_iregs();
+		unmark_fregs();
 	   lhs = code->operands;
 	   rhs = lhs->link;
 	   reg = genarith(rhs);              /* generate rhs into a register */
@@ -158,6 +200,8 @@ void genc(TOKEN code)
 		break;
 	
 	case IFOP:
+		unmark_iregs();
+		unmark_fregs();
 		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
 		genc(code->operands);
 		int op = code->operands->whichval;
@@ -173,25 +217,68 @@ void genc(TOKEN code)
 		break;
 		
 	case LEOP:
+		unmark_iregs();
+		unmark_fregs();
 		lhs = code->operands;
 		rhs = lhs->link;
-		reg = genarith(rhs);
 		sym = lhs->symentry;
 		offs = sym->offset - stkframesize;
 		switch(code->datatype){
 			case INTEGER:
 				reg = getreg(WORD);
-				asmld(MOVL, offs, getreg(WORD), lhs->stringval);
+				asmld(MOVL, offs, reg, lhs->stringval);
 				break;
 		};
+		reg2 = genarith(rhs);		//have rhs after lhs
+		//generating compare
+		asmrr(CMPL, reg2, reg);
 		break;
+		
+	case TIMESOP:
+		unmark_iregs();
+		unmark_fregs();
+		//printf("process timesop\n");
+		lhs = code->operands;
+		//printf("%d\n", lhs == NULL);
+		rhs = lhs->link;
+		//printf("%d\n", rhs == NULL);
+		reg = genarith(lhs);
+		reg2 = genarith(rhs);
+		asmrr(MULSD, reg2, reg);
+		break;
+	
+	case FLOATOP:
+		//printf("processing floatop\n");
+		lhs = code->operands;
+		reg = getreg(WORD);
+		sym = lhs->symentry;
+		offs = sym->offset - stkframesize;
+		asmld(MOVL, offs, reg, lhs->stringval);
+		asmfloat(reg, getreg(FLOAT));
+		asmsttemp(reg);
+		break;
+		
 	 };
 	
   }
 
+void print_iregs(){
+	int i = 0; 
+	for(; i < NUM_I_REGS; i++){
+		printf("%d, ", int_regs[i]);
+	}
+	printf("\n");
+}
+  
 //unmarks all integer regs. Use at beginning of statement.  
 void unmark_iregs(){
 	int i;
 	for(i = 0; i < NUM_I_REGS; i++)
 		int_regs[i] = 0;
+}
+
+void unmark_fregs(){
+	int i;
+	for(i = 0; i < NUM_F_REGS; i++)
+		f_regs[i] = 0;
 }
