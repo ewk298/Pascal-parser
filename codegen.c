@@ -371,12 +371,13 @@ void genc(TOKEN code)
 		//unmark_fregs();
 		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
 		//printf("%d\n", code->operands->whichval);
-		genarith(code->operands);
+		genarith(code->operands);			//was genarith
 		//genc(code->operands);
 		int op = code->operands->whichval;
 		int thenlabel = nextlabel++;
 		int elselabel = nextlabel++;
 		asmjump(c_to_jmp[op], thenlabel);
+		//genc(code->operands->link);
 		asmjump(JMP, elselabel);
 		//then label
 		asmlabel(thenlabel);
