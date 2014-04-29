@@ -332,7 +332,11 @@ void genc(TOKEN code)
 	
      switch ( code->whichval )
        { case PROGNOP:
+	   //printf("processing progn\n");
 	   tok = code->operands;
+	   //special case where progn is on one line. End in graph1.sample
+	   if(tok == NULL)
+			tok = code->link;
 	   while ( tok != NULL )
 	     {  genc(tok);
 		tok = tok->link;
@@ -366,8 +370,9 @@ void genc(TOKEN code)
 		//unmark_iregs();
 		//unmark_fregs();
 		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
-		printf("%d\n", code->operands->whichval);
+		//printf("%d\n", code->operands->whichval);
 		genarith(code->operands);
+		//genc(code->operands);
 		int op = code->operands->whichval;
 		int thenlabel = nextlabel++;
 		int elselabel = nextlabel++;
@@ -388,7 +393,7 @@ void genc(TOKEN code)
 		break;
 
 	case GOTOOP:
-		printf("processing goto\n");
+		//printf("processing goto\n");
 		asmjump(JMP, code->operands->intval);
 		break;
 
