@@ -58,9 +58,9 @@ graph1:
         movl    $0,%ecx                 #  0 -> %ecx
         cmpl    %ecx,%eax               #  compare %eax - %ecx
         je      .L9                     #  jump if     ==
+        jmp     .L0                     #  jump
         jmp     .L10                    #  jump
 .L9:
-        jmp     .L0                     #  jump
 .L10:
         movl    $.LC11,%edi             #  addr of literal .LC11
         call    writeln                 #  writeln()

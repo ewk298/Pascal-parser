@@ -316,6 +316,7 @@ int genarith(TOKEN code)
 /* Generate code for a Statement from an intermediate-code form */
 void genc(TOKEN code)
   {  TOKEN tok, lhs, rhs;
+	TOKEN then_tok, else_tok;
      int reg, reg2, offs;
      SYMBOL sym;
      if (DEBUGGEN)
@@ -367,21 +368,23 @@ void genc(TOKEN code)
 		break;
 	
 	case IFOP:
-		//unmark_iregs();
-		//unmark_fregs();
 		//moves args to registers and generates cmp instruction. JMP uses condition code set by compare
-		//printf("%d\n", code->operands->whichval);
-		genarith(code->operands);			//was genarith
+		then_tok = code->operands->link;
+		
+		else_tok = code->operands->link->link;
+		then_tok->link = NULL;						//null out so only this statement is processed
+		genarith(code->operands);			
 		//genc(code->operands);
 		int op = code->operands->whichval;
 		int thenlabel = nextlabel++;
 		int elselabel = nextlabel++;
 		asmjump(c_to_jmp[op], thenlabel);
-		//genc(code->operands->link);
+		if(else_tok)
+			genc(else_tok);
 		asmjump(JMP, elselabel);
 		//then label
 		asmlabel(thenlabel);
-		genc(code->operands->link);
+		genc(then_tok);
 		//else label
 		asmlabel(elselabel);
 		break;
