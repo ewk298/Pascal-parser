@@ -36,6 +36,8 @@ void unmark_iregs();
 void unmark_fregs();
 void print_iregs();
 void print_fregs();
+void process_pointer(TOKEN code);
+void process_aref(TOKEN code);
 
 int c_to_jmp[12] = {0, 0, 0, 0, 0, 0, JE, JNE, JL, JLE, JGE, JG};
 //0 indicates register unused. EAX, ECX, EDX, EBX
@@ -271,7 +273,9 @@ int genarith(TOKEN code)
 					//print_fregs();
 					1 == 1;		//can't have these assignments right after label. doing this for now
 					int return_type = code->symentry->datatype->basicdt;
+					//printf("return type: %d\n", return_type);
 					int args_type = code->symentry->datatype->link->datatype->basicdt;
+					//printf("args type: %d\n", args_type);
 					//see if xmm0 should be saved
 					if(f_regs[0] == 1 && args_type == 1){
 						asmsttemp(FBASE);		//store xmm0 onto stack
@@ -344,15 +348,16 @@ void genc(TOKEN code)
 	      };
 	   break;
 	 case ASSIGNOP:                   /* Trivial version: handles I := e */
-		//unmark_iregs();
-		//unmark_fregs();
 	   lhs = code->operands;
 	   rhs = lhs->link;
 	   reg = genarith(rhs);              /* generate rhs into a register */
+	   //if lhs is a pointer
+		if(lhs->datatype == 4)
+			process_pointer(lhs);
+		else if(lhs->tokentype == 0 && lhs->whichval == 25)
+			process_aref(lhs);
 	   sym = lhs->symentry;              /* assumes lhs is a simple var  */
 	   offs = sym->offset - stkframesize; /* net offset of the var   */
-	   //printf("assign datatype: %d\n", code->datatype);
-	   //printf("lhs datatype: %d\n", lhs->datatype);
            switch (code->datatype)            /* store value into lhs  */
              { case INTEGER:
                  asmst(MOVL, reg, offs, lhs->stringval);
@@ -408,6 +413,25 @@ void genc(TOKEN code)
 	 
 	
   }
+  
+void process_aref(TOKEN code){
+	printf("processing aref\n");
+	//printf("%d\n", code->operands->link->intval);
+	printf("%d\n", code->operands->operands->symentry->offset);
+	int ref_off = code->operands->operands->symentry->offset;
+	int offset = stkframesize - ref_off;
+	printf("%d\n", offset);
+	asmld(MOVQ, -offset, getreg(WORD), code->operands->operands->stringval);
+}
+  
+void process_pointer(TOKEN code){
+	//printf("processing pointer\n");
+	int offs;
+	offs = -(stkframesize - code->symentry->offset);
+	//printf("needed offset: %d\n", stkframesize - code->symentry->offset);
+	asmst(MOVQ, RAX, offs, code->stringval);
+	
+}
 
 void print_iregs(){
 	int i = 0; 

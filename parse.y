@@ -958,6 +958,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 	if(strcmp(fn->stringval, "new") == 0){
 		//printf("making new function...\n");
 		//create number token for size of allocated memory
+		SYMBOL func_symbol = searchst(fn->stringval);
 		TOKEN size = copytoken(tok);
 		size->tokentype = NUMBERTOK;
 		size->datatype = INTEGER;
@@ -973,6 +974,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 		TOKEN assignop = copytoken(size);
 		assignop->whichval = ASSIGNOP;
 		assignop->tokentype = OPERATOR;
+		func->symentry = func_symbol;
 		
 		return binop(assignop, args, func);
 		
@@ -982,6 +984,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 		SYMBOL writelni = searchst("writelni");
 		//printf("kind: %d\n", writelni->kind);
 		SYMBOL writelnf = searchst("writelnf");
+		
 		//printf("kind: %d\n", writelnf->kind);
 		int flag = 0;
 		if(!(strcmp(fn->stringval, "writeln")) || !(strcmp(fn->stringval, "write")))
