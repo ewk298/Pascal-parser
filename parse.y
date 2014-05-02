@@ -422,7 +422,7 @@ TOKEN convertnil(TOKEN nil){
 	//printf("converting nil to 0\n");
 	TOKEN zero = talloc();
 	zero->tokentype = NUMBERTOK;
-	zero->datatype = INTEGER;
+	zero->datatype = POINTER;
 	zero->intval = 0;
 	return zero;
 }

@@ -50,6 +50,10 @@ int f_regs[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 int nextlabel;    /* Next available label number */
 int stkframesize;   /* total stack frame size */
+int MRR;			//most recent register. Using for aref just for now
+int width;			//0 for word, 1 for float
+int rhswidth;		//0 or 1 for the rhs. Using for aref assign
+
 
 /* Top-level entry for code generator.
    pcode    = pointer to code:  (program foo (output) (progn ...))
@@ -83,6 +87,7 @@ int getreg(int kind)
 		while(int_regs[index] == 1)
 			index++;
 		int_regs[index] = 1;
+		width = 0;
 		return index;
 	}
 	
@@ -90,6 +95,7 @@ int getreg(int kind)
 		while(f_regs[index] == 1)
 			index++;
 		f_regs[index] = 1;
+		width = 1;
 		return index + FBASE;
 	}
     /*     ***** fix this *****   */
@@ -101,6 +107,7 @@ int getreg(int kind)
 int genarith(TOKEN code)
   {   
 	//printf("code tokentype: %d\n", code->tokentype);
+	//printf("code datatype: %d\n", code->datatype);
 	int num, reg, reg2, offs, labelnum;	
 	int flag = 0;
 	SYMBOL sym;
@@ -128,6 +135,15 @@ int genarith(TOKEN code)
 					reg = getreg(FLOAT);
 					if(num >= MINIMMEDIATE && num <= MAXIMMEDIATE)
 						asmldflit(MOVSD, labelnum, reg);
+					break;
+					
+				case POINTER:
+					num = code->intval;
+					reg = getreg(WORD);
+					if ( num >= MINIMMEDIATE && num <= MAXIMMEDIATE ){
+						asmimmed(MOVQ, num, reg);				
+						width = 1;
+					}
 					break;
 			}
 			break;
@@ -163,6 +179,8 @@ int genarith(TOKEN code)
 				//printf("%d\n", offs);
 				reg = getreg(WORD);
 				asmld(MOVQ, offs,  reg, code->stringval);
+				width = 1;			//special case
+				//printf("end processing pointer\n");
 			}
 			break;
 		case OPERATOR:
@@ -320,6 +338,31 @@ int genarith(TOKEN code)
 					}
 					
 					break;
+					
+				case AREFOP:
+					//printf("processing aref\n");
+					//printf("%d\n", code->operands->whichval);
+					lhs = code->operands->operands;				//will be a pointer or another aref
+					//printf("%s\n", lhs->stringval);
+					/* if(lhs->tokentype == IDENTIFIER && lhs->datatype == POINTER)
+						printf("process pointer here\n");
+					else if(lhs->datatype =  */
+					reg = genarith(lhs);
+					//printf("MRR: %d\n", MRR);
+					//printf("width: %d\n", width);
+					//printf("%d\n", rhswidth);
+					if(MRR < FBASE){
+						if(rhswidth == 0)
+							asmstr(MOVL, MRR, code->operands->link->intval, reg, code->operands->operands->stringval);
+						else if(rhswidth == 1)
+							asmstr(MOVQ, MRR, code->operands->link->intval, reg, code->operands->operands->stringval);
+					}
+					else if(MRR >= FBASE){
+						asmstr(MOVSD, MRR, code->operands->link->intval, reg, code->operands->operands->stringval);
+					}
+					
+					// i think i need something extra here for nested arefs. (offsets...)
+					break;
 			};
 	};
 	return reg;
@@ -331,7 +374,6 @@ void genc(TOKEN code)
   {  TOKEN tok, lhs, rhs;
 	TOKEN then_tok, else_tok;
      int reg, reg2, offs;
-     int width;
      SYMBOL sym;
      if (DEBUGGEN)
        { printf("genc\n");
@@ -362,12 +404,15 @@ void genc(TOKEN code)
 	   lhs = code->operands;
 	   rhs = lhs->link;
 	   reg = genarith(rhs);              /* generate rhs into a register */
-	   //if lhs is a pointer
+	   MRR = reg;
+	   //if lhs is a pointer. (change this so it works recursively). move stuff to process in genarith
 		if(lhs->datatype == 4)
 			process_pointer(lhs);
-		//if it's an aref
+		//if it's an aref. (change this so it works recursively). move stuff to process in genarith
 		else if(lhs->tokentype == 0 && lhs->whichval == 25){
-			process_aref(lhs);
+			//printf("width: %d\n", width);
+			rhswidth = width;					//use this value for assignment in aref
+			reg2 = genarith(lhs);
 		}
 		
 		sym = lhs->symentry;              /* assumes lhs is a simple var  */
@@ -434,7 +479,7 @@ void genc(TOKEN code)
 	
   }
   
-//process aref and returns register that contians aref address
+//process aref and returns register that contians aref address. MOVE THIS CODE TO GENARITH
 int process_aref(TOKEN code){
 	int reg;
 	// printf("processing aref\n");
@@ -449,7 +494,7 @@ int process_aref(TOKEN code){
 	asmstr(MOVQ, reg, code->operands->link->intval, reg, code->operands->operands->stringval);
 	return reg;
 }
-  
+  //MOVE THIS CODE TO GENARITH
 void process_pointer(TOKEN code){
 	//printf("processing pointer\n");
 	int offs;
