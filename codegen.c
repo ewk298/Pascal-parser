@@ -340,7 +340,7 @@ int genarith(TOKEN code)
 					break;
 					
 				case AREFOP:
-					//printf("processing aref\n");
+					printf("processing aref\n");
 					//printf("%d\n", code->operands->whichval);
 					lhs = code->operands->operands;				//will be a pointer or another aref
 					//printf("%s\n", lhs->stringval);
