@@ -37,7 +37,7 @@ void unmark_fregs();
 void print_iregs();
 void print_fregs();
 void process_pointer(TOKEN code);
-void process_aref(TOKEN code);
+int process_aref(TOKEN code);
 
 int c_to_jmp[12] = {0, 0, 0, 0, 0, 0, JE, JNE, JL, JLE, JGE, JG};
 //0 indicates register unused. EAX, ECX, EDX, EBX
@@ -147,13 +147,22 @@ int genarith(TOKEN code)
 			sym = code->symentry;
 			//printf("sym basicdt: %d\n", sym->basicdt);
 			offs = sym->offset - stkframesize;
+			//integer
 			if(sym->basicdt == 0){
 				reg = getreg(WORD);
 				asmld(MOVL, offs, reg, code->stringval);
 			}
+			//real
 			else if(sym->basicdt == 1){
 				reg = getreg(FLOAT);
 				asmld(MOVSD, offs, reg, code->stringval);
+			}
+			//pointer
+			else if(sym->basicdt = 4){
+				//printf("processing pointer\n");
+				//printf("%d\n", offs);
+				reg = getreg(WORD);
+				asmld(MOVQ, offs,  reg, code->stringval);
 			}
 			break;
 		case OPERATOR:
@@ -322,6 +331,7 @@ void genc(TOKEN code)
   {  TOKEN tok, lhs, rhs;
 	TOKEN then_tok, else_tok;
      int reg, reg2, offs;
+     int width;
      SYMBOL sym;
      if (DEBUGGEN)
        { printf("genc\n");
@@ -348,26 +358,36 @@ void genc(TOKEN code)
 	      };
 	   break;
 	 case ASSIGNOP:                   /* Trivial version: handles I := e */
+	  // printf("processing assignop\n");
 	   lhs = code->operands;
 	   rhs = lhs->link;
 	   reg = genarith(rhs);              /* generate rhs into a register */
 	   //if lhs is a pointer
 		if(lhs->datatype == 4)
 			process_pointer(lhs);
-		else if(lhs->tokentype == 0 && lhs->whichval == 25)
+		//if it's an aref
+		else if(lhs->tokentype == 0 && lhs->whichval == 25){
 			process_aref(lhs);
-	   sym = lhs->symentry;              /* assumes lhs is a simple var  */
-	   offs = sym->offset - stkframesize; /* net offset of the var   */
-           switch (code->datatype)            /* store value into lhs  */
-             { case INTEGER:
-                 asmst(MOVL, reg, offs, lhs->stringval);
-                 break;
-                 /* ...  */
+		}
+		
+		sym = lhs->symentry;              /* assumes lhs is a simple var  */
+		//assuming here that null sym means aref
+		if(sym){
+	   		offs = sym->offset - stkframesize; /* net offset of the var   */
+
+	       	switch (code->datatype)            /* store value into lhs  */
+	         { case INTEGER:
+	             asmst(MOVL, reg, offs, lhs->stringval);
+	             break;
+	             /* ...  */
 				case REAL:
 					asmst(MOVSD, reg, offs, lhs->stringval);
 					break;
-             };
-           break;
+	         };
+     	}
+       break;
+
+	   
 	case LABELOP:
 		asmlabel(code->operands->intval);
 		break;
@@ -414,14 +434,20 @@ void genc(TOKEN code)
 	
   }
   
-void process_aref(TOKEN code){
-	printf("processing aref\n");
-	//printf("%d\n", code->operands->link->intval);
-	printf("%d\n", code->operands->operands->symentry->offset);
+//process aref and returns register that contians aref address
+int process_aref(TOKEN code){
+	int reg;
+	// printf("processing aref\n");
+	// printf("%d\n", code->operands->link->intval);
+	// printf("%d\n", code->operands->operands->symentry->offset);
 	int ref_off = code->operands->operands->symentry->offset;
 	int offset = stkframesize - ref_off;
-	printf("%d\n", offset);
-	asmld(MOVQ, -offset, getreg(WORD), code->operands->operands->stringval);
+	//printf("%d\n", offset);
+	reg = getreg(WORD);
+	asmld(MOVQ, -offset, reg, code->operands->operands->stringval);
+	//store relative to most recently acquired register
+	asmstr(MOVQ, reg, code->operands->link->intval, reg, code->operands->operands->stringval);
+	return reg;
 }
   
 void process_pointer(TOKEN code){
