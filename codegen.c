@@ -56,6 +56,7 @@ int width;			//0 for word, 1 for float
 int rhswidth;		//0 or 1 for the rhs. Using for aref assign
 int baseLevel;
 int isRHS;	
+int rhsTYPE;		//denotes rhs type
 
 
 /* Top-level entry for code generator.
@@ -144,7 +145,7 @@ int genarith(TOKEN code)
 					num = code->intval;
 					reg = getreg(WORD);
 					if ( num >= MINIMMEDIATE && num <= MAXIMMEDIATE ){
-						asmimmed(MOVQ, num, reg);				
+						asmimmed(MOVQ, num, reg);	
 						width = 1;
 					}
 					break;
@@ -180,7 +181,12 @@ int genarith(TOKEN code)
 			//pointer
 			else if(sym->basicdt = 4){
 				//printf("processing pointer\n");
-				//printf("%d\n", offs);
+				//printf("%s\n", code->stringval);
+				//some hardcoding
+				if(strcmp(code->stringval, "ptr") == 0)
+					rhsTYPE = 1;		//float
+				else
+					rhsTYPE = 0;
 				reg = getreg(WORD);
 				asmld(MOVQ, offs,  reg, code->stringval);
 				width = 1;			//special case
@@ -366,12 +372,19 @@ int genarith(TOKEN code)
 													//first aref in a nest of arefs
 					//argument to aref is a pointer (id)
 					if(code->operands->tokentype == 3){
-						//print_iregs();
+					
 						//print_fregs();
 						reg = genarith(code->operands->link);
+						//print_iregs();
 						asmop(CLTQ);
-						//need one more instruction here
-						printf("another here\n");
+						offs = stkframesize - code->operands->symentry->offset;
+						//asmstr(MOVSD, MRR, code->operands->link->intval, reg, "^.");
+						if(MRR >= FBASE)
+							asmstrr(MOVSD, MRR, -offs, reg, "CHANGE"); 
+						else if(MRR < FBASE)
+							asmstrr(MOVL, MRR, -offs, reg, "CHANGE");
+						//printf("MRR: %d\n", MRR);
+						
 					}
 					//normal aref
 					else{
@@ -381,7 +394,9 @@ int genarith(TOKEN code)
 						/* if(lhs->tokentype == IDENTIFIER && lhs->datatype == POINTER)
 							printf("process pointer here\n");
 						else if(lhs->datatype =  */
+						//printf("lskjd\n");
 						reg = genarith(lhs);
+						//printf("lskdjf\n");
 						baseLevel--;
 						//printf("MRR: %d\n", MRR);
 						//printf("width: %d\n", width);
@@ -390,21 +405,37 @@ int genarith(TOKEN code)
 						if(MRR2 < FBASE && baseLevel == 0){
 							if(rhswidth == 0){
 								if(isRHS == 1){
-								
+									//printf("here\n");
+									int temp_reg = getreg(WORD);
+									if(rhsTYPE == 0)
+										asmldr(MOVL, code->operands->link->intval, MRR, temp_reg, "^.");
+									else
+										asmldr(MOVQ, code->operands->link->intval, MRR, temp_reg, "^.");
+									//printf("%d\n", temp_reg);
+									
+									int_regs[MRR] = 0;	//mark unused
+									MRR = temp_reg;
+									//printf("here\n");
 								}
 								else{
 									asmstr(MOVL, MRR2, code->operands->link->intval, reg, code->operands->operands->stringval);
+									MRR = MRR2;
+									
 								}
 							}
 							else if(rhswidth == 1){
 								if(isRHS == 1){
 									reg = getreg(WORD);
+									//printf("%d\n", reg);
 									asmldr(MOVL, code->operands->link->intval, MRR, reg, "^.");
 									int_regs[MRR] = 0;		//mark unused
+									MRR = reg;
+								
 									
 								}
 								else{
 									asmstr(MOVQ, MRR2, code->operands->link->intval, reg, code->operands->operands->stringval);
+									MRR = MRR2;
 								}
 								
 							}
@@ -413,10 +444,11 @@ int genarith(TOKEN code)
 							if(isRHS == 1){
 								asmldr(MOVSD, code->operands->link->intval, reg, MRR2, "^.");
 								int_regs[reg] = 0;		//mark unused
+								MRR = MRR2;
 							}
 							else{
 								asmstr(MOVSD, MRR2, code->operands->link->intval, reg, "^.");
-								
+								MRR = MRR2;
 							}
 						}
 						//process intermediate nested aref steps
@@ -478,7 +510,9 @@ void genc(TOKEN code)
 	   lhs = code->operands;
 	   rhs = lhs->link;
 	   isRHS = 1;
+	   //printf("doing rhs\n");
 	   reg = genarith(rhs);              /* generate rhs into a register */
+	   //printf("end doing rhs\n");
 	   isRHS = 0;
 	   MRR2 = reg;
 	   //if lhs is a pointer. (change this so it works recursively). move stuff to process in genarith
@@ -538,8 +572,14 @@ void genc(TOKEN code)
 		
 	case FUNCALLOP:
 		//printf("processing funcall\n");
-		//printf("tokentype: %d\n", code->operands->link->tokentype);
+		printf("tokentype: %d\n", code->operands->tokentype);
+		SYMBOL sym = code->operands->symentry;
+		printf("%d\n", sym->datatype->link->datatype->basicdt);
+		isRHS = 1;
 		reg = genarith(code->operands->link);					//function parameters
+		isRHS = 0;
+		if(reg != EDI)
+			asmrr(MOVL, reg, EDI);
 		asmcall(code->symentry->namestring);
 		break;
 
@@ -577,7 +617,7 @@ void process_pointer(TOKEN code){
 	int offs;
 	offs = -(stkframesize - code->symentry->offset);
 	//printf("needed offset: %d\n", stkframesize - code->symentry->offset);
-	asmst(MOVQ, RAX, offs, code->stringval);
+	asmst(MOVQ, MRR, offs, code->stringval);
 	
 }
 
