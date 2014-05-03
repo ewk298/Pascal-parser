@@ -779,6 +779,7 @@ void  instlabel (TOKEN num){
 /* findtype looks up a type name in the symbol table, puts the pointer
    to its type into tok->symtype, returns tok. */
 TOKEN findtype(TOKEN tok){
+	findid(tok);					//addition for code generator part
 	//printf("linking %s to it's type...\n", tok->stringval);
 	SYMBOL stype = searchst(tok->stringval);
 	tok->symtype = stype;
@@ -796,8 +797,7 @@ TOKEN findid(TOKEN tok){
 	printf("looking for %s in symbol table\n", tok->stringval);
 	//if id is in symbol table and 
 	if((result != NULL) && (result->kind == CONSTSYM)){
-		//printf("found constant variable in symbol table. need to replace with actual value\n\n");
-		//printf("token name = %s\n", tok->stringval);
+		printf("found\n");
 		constant_val->tokentype = NUMBERTOK;
 		constant_val->datatype = result->basicdt;			//copy datatype
 		//printf("datatype = %d\n", result->basicdt); 
@@ -815,6 +815,7 @@ TOKEN findid(TOKEN tok){
 	}
 	//not a constant but fill in symentry for id
 	else if(result){
+		printf("found\n");
 		tok->symentry = result;
 		tok->datatype = result->basicdt;
 	}

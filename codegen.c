@@ -51,8 +51,11 @@ int f_regs[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int nextlabel;    /* Next available label number */
 int stkframesize;   /* total stack frame size */
 int MRR;			//most recent register. Using for aref just for now
+int MRR2;
 int width;			//0 for word, 1 for float
 int rhswidth;		//0 or 1 for the rhs. Using for aref assign
+int baseLevel;
+int isRHS;	
 
 
 /* Top-level entry for code generator.
@@ -160,6 +163,7 @@ int genarith(TOKEN code)
 		case IDENTIFIERTOK:
 			/*     ***** fix this *****   */
 			//printf("processing id\n");
+			//printf("%s\n", code->stringval);
 			sym = code->symentry;
 			//printf("sym basicdt: %d\n", sym->basicdt);
 			offs = sym->offset - stkframesize;
@@ -180,6 +184,7 @@ int genarith(TOKEN code)
 				reg = getreg(WORD);
 				asmld(MOVQ, offs,  reg, code->stringval);
 				width = 1;			//special case
+				MRR = reg;									//consider moving all assignemnts to MRR into getreg().
 				//printf("end processing pointer\n");
 			}
 			break;
@@ -212,13 +217,17 @@ int genarith(TOKEN code)
 					if(reg == FBASE && reg2 == FBASE){
 						reg = FBASE + 1;		//xmm1
 						reg2 = FBASE;			//xmm0
+						asmrr(MULSD, reg2, reg);
 					}
 					//lhs and rhs were both functions that returned an integer
 					else if(reg == RBASE && reg2 == RBASE){
-					
+						asmrr(IMULL, reg2, reg);
+					}
+					else{
+						asmrr(IMULL, reg2, reg);
 					}
 					
-					asmrr(MULSD, reg2, reg);
+					
 					break;
 					
 				case MINUSOP:
@@ -294,6 +303,16 @@ int genarith(TOKEN code)
 					asmrr(CMPL, reg2, reg);
 					reg = reg2;
 					break;	
+				
+				case NEOP:
+					//printf("processing not equal\n");
+					lhs = code->operands;
+					rhs = lhs->link;
+					reg = genarith(lhs);
+					reg2 = genarith(rhs);
+					asmrr(CMPQ, reg2, reg);
+					reg = reg2;
+					break;
 					
 				case FUNCALLOP:
 					//printf("generating for funcall\n");
@@ -340,28 +359,82 @@ int genarith(TOKEN code)
 					break;
 					
 				case AREFOP:
-					printf("processing aref\n");
-					//printf("%d\n", code->operands->whichval);
-					lhs = code->operands->operands;				//will be a pointer or another aref
-					//printf("%s\n", lhs->stringval);
-					/* if(lhs->tokentype == IDENTIFIER && lhs->datatype == POINTER)
-						printf("process pointer here\n");
-					else if(lhs->datatype =  */
-					reg = genarith(lhs);
-					//printf("MRR: %d\n", MRR);
-					//printf("width: %d\n", width);
-					//printf("%d\n", rhswidth);
-					if(MRR < FBASE){
-						if(rhswidth == 0)
-							asmstr(MOVL, MRR, code->operands->link->intval, reg, code->operands->operands->stringval);
-						else if(rhswidth == 1)
-							asmstr(MOVQ, MRR, code->operands->link->intval, reg, code->operands->operands->stringval);
+					
+					//printf("processing aref\n");
+					//printf("tokentype: %d\n", code->operands->tokentype);
+					//printf("%d\n", code->operands->link->intval);
+													//first aref in a nest of arefs
+					//argument to aref is a pointer (id)
+					if(code->operands->tokentype == 3){
+						//print_iregs();
+						//print_fregs();
+						reg = genarith(code->operands->link);
+						asmop(CLTQ);
+						//need one more instruction here
+						printf("another here\n");
 					}
-					else if(MRR >= FBASE){
-						asmstr(MOVSD, MRR, code->operands->link->intval, reg, code->operands->operands->stringval);
+					//normal aref
+					else{
+						baseLevel++;
+						lhs = code->operands->operands;				//will be a pointer or another aref
+						//printf("%s\n", lhs->stringval);
+						/* if(lhs->tokentype == IDENTIFIER && lhs->datatype == POINTER)
+							printf("process pointer here\n");
+						else if(lhs->datatype =  */
+						reg = genarith(lhs);
+						baseLevel--;
+						//printf("MRR: %d\n", MRR);
+						//printf("width: %d\n", width);
+						//printf("%d\n", rhswidth);
+						
+						if(MRR2 < FBASE && baseLevel == 0){
+							if(rhswidth == 0){
+								if(isRHS == 1){
+								
+								}
+								else{
+									asmstr(MOVL, MRR2, code->operands->link->intval, reg, code->operands->operands->stringval);
+								}
+							}
+							else if(rhswidth == 1){
+								if(isRHS == 1){
+									reg = getreg(WORD);
+									asmldr(MOVL, code->operands->link->intval, MRR, reg, "^.");
+									int_regs[MRR] = 0;		//mark unused
+									
+								}
+								else{
+									asmstr(MOVQ, MRR2, code->operands->link->intval, reg, code->operands->operands->stringval);
+								}
+								
+							}
+						}
+						else if(MRR2 >= FBASE && baseLevel == 0){
+							if(isRHS == 1){
+								asmldr(MOVSD, code->operands->link->intval, reg, MRR2, "^.");
+								int_regs[reg] = 0;		//mark unused
+							}
+							else{
+								asmstr(MOVSD, MRR2, code->operands->link->intval, reg, "^.");
+								
+							}
+						}
+						//process intermediate nested aref steps
+						if(baseLevel != 0){
+							//printf("intermediate steps\n");
+							//printf("MRR: %d\n", MRR);
+							int temp_reg = getreg(WORD);
+							//printf("%d\n", temp_reg);
+							int_regs[MRR] = 0;		//mark old register unused
+							
+							//printf("%d\n", code->operands->link->intval);
+							//hardcoding movq for now. check later
+							asmldr(MOVQ, code->operands->link->intval, MRR, temp_reg, "^.");
+							//modify MRR here
+							MRR = temp_reg;
+						}
 					}
 					
-					// i think i need something extra here for nested arefs. (offsets...)
 					break;
 			};
 	};
@@ -401,10 +474,13 @@ void genc(TOKEN code)
 	   break;
 	 case ASSIGNOP:                   /* Trivial version: handles I := e */
 	  // printf("processing assignop\n");
+	  //print_iregs();
 	   lhs = code->operands;
 	   rhs = lhs->link;
+	   isRHS = 1;
 	   reg = genarith(rhs);              /* generate rhs into a register */
-	   MRR = reg;
+	   isRHS = 0;
+	   MRR2 = reg;
 	   //if lhs is a pointer. (change this so it works recursively). move stuff to process in genarith
 		if(lhs->datatype == 4)
 			process_pointer(lhs);
@@ -412,6 +488,7 @@ void genc(TOKEN code)
 		else if(lhs->tokentype == 0 && lhs->whichval == 25){
 			//printf("width: %d\n", width);
 			rhswidth = width;					//use this value for assignment in aref
+			baseLevel = 0;
 			reg2 = genarith(lhs);
 		}
 		
