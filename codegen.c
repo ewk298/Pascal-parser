@@ -57,6 +57,7 @@ int rhswidth;		//0 or 1 for the rhs. Using for aref assign
 int baseLevel;
 int isRHS;	
 int rhsTYPE;		//denotes rhs type
+int inaref;
 
 
 /* Top-level entry for code generator.
@@ -219,18 +220,27 @@ int genarith(TOKEN code)
 					//printf("%d\n", rhs == NULL);
 					reg = genarith(lhs);
 					reg2 = genarith(rhs);
+					
 					//lhs and rhs were both functions that returned a real
-					if(reg == FBASE && reg2 == FBASE){
+					if((reg == FBASE && reg2 == FBASE) || !inaref){
+						
 						reg = FBASE + 1;		//xmm1
 						reg2 = FBASE;			//xmm0
+						if(!inaref){
+							reg = FBASE;
+							reg2 = FBASE + 1;
+						}
 						asmrr(MULSD, reg2, reg);
+						//printf("here\n");
 					}
 					//lhs and rhs were both functions that returned an integer
 					else if(reg == RBASE && reg2 == RBASE){
 						asmrr(IMULL, reg2, reg);
+						
 					}
-					else{
+					else if(inaref){
 						asmrr(IMULL, reg2, reg);
+						//printf("here\n");
 					}
 					
 					
@@ -289,6 +299,22 @@ int genarith(TOKEN code)
 					//generating compare
 					asmrr(CMPL, reg2, reg);
 					reg = reg2;
+					break;
+				
+				case LTOP:
+					//printf("processing ltop\n");
+					lhs = code->operands;
+					rhs = lhs->link;
+					sym = lhs->symentry;
+					offs = sym->offset - stkframesize;
+					
+					switch(code->datatype){
+						case INTEGER:
+							reg = getreg(WORD);
+							asmld(MOVL, offs, reg, lhs->stringval);
+							break;
+					};
+					reg2 = genarith(rhs);		//have rhs after lhs
 					break;
 					
 				case EQOP:
@@ -365,7 +391,7 @@ int genarith(TOKEN code)
 					break;
 					
 				case AREFOP:
-					
+					inaref = 1;
 					//printf("processing aref\n");
 					//printf("tokentype: %d\n", code->operands->tokentype);
 					//printf("%d\n", code->operands->link->intval);
@@ -466,7 +492,7 @@ int genarith(TOKEN code)
 							MRR = temp_reg;
 						}
 					}
-					
+					inaref = 0;
 					break;
 			};
 	};
@@ -480,6 +506,7 @@ void genc(TOKEN code)
 	TOKEN then_tok, else_tok;
      int reg, reg2, offs;
      SYMBOL sym;
+	 inaref = 0;
      if (DEBUGGEN)
        { printf("genc\n");
 	 dbugprinttok(code);
@@ -571,14 +598,17 @@ void genc(TOKEN code)
 		break;
 		
 	case FUNCALLOP:
-		//printf("processing funcall\n");
-		printf("tokentype: %d\n", code->operands->tokentype);
+		1 == 1;
 		SYMBOL sym = code->operands->symentry;
-		printf("%d\n", sym->datatype->link->datatype->basicdt);
+		int flag = 0;
+		if(strcmp("writelnf", code->operands->stringval) == 0){
+			flag = 1;
+			MRR2 = FBASE;
+		}
 		isRHS = 1;
 		reg = genarith(code->operands->link);					//function parameters
 		isRHS = 0;
-		if(reg != EDI)
+		if(reg != EDI && !flag)
 			asmrr(MOVL, reg, EDI);
 		asmcall(code->symentry->namestring);
 		break;

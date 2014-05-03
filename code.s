@@ -11,65 +11,127 @@ graph1:
         movq    %rsp, %rbp        # move stack pointer to base pointer
         .cfi_offset 6, -16
         .cfi_def_cfa_register 6
-        subq    $48, %rsp         # make space for this stack frame
+        subq    $1344, %rsp       # make space for this stack frame
         movq    %rbx, %r9        # save %rbx (callee-saved) in %r9
 # ------------------------- begin Your code -----------------------------
-        movl    $0,%eax                 #  0 -> %eax
-        movl    %eax,-32(%rbp)          #  %eax -> i
+        movl    $48,%eax                #  48 -> %eax
+        movl    %eax,%edi               #  %eax -> %edi
+        call    new                     #  new()
+        movq    %rax,-1016(%rbp)        #  %rax -> john
+        movl    $48,%eax                #  48 -> %eax
+        movl    %eax,%edi               #  %eax -> %edi
+        call    new                     #  new()
+        movq    %rax,-1008(%rbp)        #  %rax -> mary
+        movl    $48,%eax                #  48 -> %eax
+        movl    %eax,%edi               #  %eax -> %edi
+        call    new                     #  new()
+        movq    %rax,-1000(%rbp)        #  %rax -> fred
+        movl    $2,%eax                 #  2 -> %eax
+        movq    -1016(%rbp),%rcx        #  john -> %rcx
+        movl    %eax,32(%rcx)           #  %eax -> john[32+%rcx]
+        movl    $19,%eax                #  19 -> %eax
+        movq    -1016(%rbp),%rcx        #  john -> %rcx
+        movl    %eax,0(%rcx)            #  %eax -> john[0+%rcx]
 .L1:
-        movl    -32(%rbp),%eax          #  i -> %eax
-        movl    $32,%ecx                #  32 -> %ecx
-        cmpl    %ecx,%eax               #  compare %eax - %ecx
-        jle     .L3                     #  jump if     <=
-        jmp     .L4                     #  jump
-.L3:
-        movsd   .LC5(%rip),%xmm0        #  0.062500 -> %xmm0
-        movl    -32(%rbp),%eax          #  i -> %eax
-        cvtsi2sd        %eax,%xmm1      #  float %eax -> %xmm1
-        mulsd   %xmm1,%xmm0             #  %xmm0 * %xmm1 -> %xmm0
-        movsd   %xmm0,-48(%rbp)         #  %xmm0 -> x
-        movsd   -48(%rbp),%xmm0         #  x -> %xmm0
-        movsd   .LC666(%rip),%xmm1      #  0.000000 -> %xmm1
-        xorpd   %xmm1,%xmm0             #  negate %xmm0
-        call    exp                     #  exp()
-        movsd   %xmm0,-8(%rbp)          #  %xmm0 -> temp
-        movsd   .LC6(%rip),%xmm0        #  6.283180 -> %xmm0
-        movsd   -48(%rbp),%xmm1         #  x -> %xmm1
-        mulsd   %xmm1,%xmm0             #  %xmm0 * %xmm1 -> %xmm0
-        call    sin                     #  sin()
-        movsd   -8(%rbp),%xmm1          #  temp -> %xmm1
-        mulsd   %xmm0,%xmm1             #  %xmm1 * %xmm0 -> %xmm1
-        movsd   %xmm1,-40(%rbp)         #  %xmm1 -> y
-        movsd   .LC7(%rip),%xmm0        #  32.000000 -> %xmm0
-        movsd   -40(%rbp),%xmm1         #  y -> %xmm1
-        mulsd   %xmm1,%xmm0             #  %xmm0 * %xmm1 -> %xmm0
-        call    iround                  #  iround()
-        movl    $34,%ecx                #  34 -> %ecx
-        addl    %ecx,%eax               #  %eax + %ecx -> %eax
-        movl    %eax,-28(%rbp)          #  %eax -> n
+        movq    -1008(%rbp),%rax        #  mary -> %rax
+        movq    -1016(%rbp),%rcx        #  john -> %rcx
+        movq    %rax,8(%rcx)            #  %rax -> john[8+%rcx]
+        movsd   .LC4(%rip),%xmm0        #  40000.000000 -> %xmm0
+        movq    -1016(%rbp),%rax        #  john -> %rax
+        movsd   %xmm0,40(%rax)          #  %xmm0 -> ^.[40+%rax]
+        movsd   .LC5(%rip),%xmm0        #  3.000000 -> %xmm0
+        movq    -1016(%rbp),%rax        #  john -> %rax
+        movsd   %xmm0,16(%rax)          #  %xmm0 -> ^.[16+%rax]
+        movl    $21,%eax                #  21 -> %eax
+        movq    -1008(%rbp),%rcx        #  mary -> %rcx
+        movl    %eax,0(%rcx)            #  %eax -> mary[0+%rcx]
+        movq    -1000(%rbp),%rax        #  fred -> %rax
+        movq    -1008(%rbp),%rcx        #  mary -> %rcx
+        movq    %rax,8(%rcx)            #  %rax -> mary[8+%rcx]
 .L0:
-        movl    $.LC8,%edi              #  addr of literal .LC8
-        call    write                   #  write()
-        movl    -28(%rbp),%eax          #  n -> %eax
-        movl    $1,%ecx                 #  1 -> %ecx
-        subl    %ecx,%eax               #  %eax - %ecx -> %eax
-        movl    %eax,-28(%rbp)          #  %eax -> n
-        movl    -28(%rbp),%eax          #  n -> %eax
-        movl    $0,%ecx                 #  0 -> %ecx
-        cmpl    %ecx,%eax               #  compare %eax - %ecx
-        je      .L9                     #  jump if     ==
-        jmp     .L0                     #  jump
-        jmp     .L10                    #  jump
-.L9:
-.L10:
-        movl    $.LC11,%edi             #  addr of literal .LC11
-        call    writeln                 #  writeln()
-        movl    -32(%rbp),%eax          #  i -> %eax
+        movl    $20,%eax                #  20 -> %eax
+        movq    -1000(%rbp),%rcx        #  fred -> %rcx
+        movl    %eax,0(%rcx)            #  %eax -> fred[0+%rcx]
+        movq    $0,%rax                 #  -> 0 -> %rax
+        movq    -1000(%rbp),%rcx        #  fred -> %rcx
+        movq    %rax,8(%rcx)            #  %rax -> fred[8+%rcx]
+        movsd   .LC6(%rip),%xmm0        #  4.500000 -> %xmm0
+        movq    -1016(%rbp),%rax        #  john -> %rax
+        movq    8(%rax),%rcx            #  ^.[8+%rax] -> %rcx
+        movq    8(%rcx),%rax            #  ^.[8+%rcx] -> %rax
+        movsd   %xmm0,24(%rax)          #  %xmm0 -> ^.[24+%rax]
+        movq    -1016(%rbp),%rax        #  john -> %rax
+        movsd   40(%rax),%xmm0          #  ^.[40+%rax] -> %xmm0
+        movl    $96,%eax                #  96 -> %eax
+        cltq                            #  sign-extend
+        movsd   %xmm0,-1296(%rbp,%rax)  #  %xmm0 -> CHANGE[%rax]
+        movq    -1016(%rbp),%rax        #  john -> %rax
+        movq    %rax,-992(%rbp)         #  %rax -> ptr
+        movl    $0,%eax                 #  0 -> %eax
+        movl    %eax,-1308(%rbp)        #  %eax -> sum
+        movl    $1,%eax                 #  1 -> %eax
+        movl    %eax,-1312(%rbp)        #  %eax -> i
+.L2:
+        movq    -992(%rbp),%rax         #  ptr -> %rax
+        movq    $0,%rcx                 #  -> 0 -> %rcx
+        cmpq    %rcx,%rax               #  compare %rax - %rcx
+        jne     .L7                     #  jump if     !=
+        jmp     .L8                     #  jump
+.L7:
+        movl    -1308(%rbp),%eax        #  sum -> %eax
+        movq    -992(%rbp),%rcx         #  ptr -> %rcx
+        movl    0(%rcx),%edx            #  ^.[0+%rcx] -> %edx
+        addl    %edx,%eax               #  %eax + %edx -> %eax
+        movl    %eax,-1308(%rbp)        #  %eax -> sum
+        movq    -992(%rbp),%rax         #  ptr -> %rax
+        movl    0(%rax),%ecx            #  ^.[0+%rax] -> %ecx
+        movl    $-48,%eax               #  -48 -> %eax
+        movl    $48,%edx                #  48 -> %edx
+        movl    -1312(%rbp),%ebx        #  i -> %ebx
+        imull   %ebx,%edx               #  %edx * %ebx -> %edx
+        addl    %edx,%eax               #  %eax + %edx -> %eax
+        cltq                            #  sign-extend
+        movl    %ecx,-976(%rbp,%rax)    #  %ecx -> CHANGE[%rax]
+        movq    -1016(%rbp),%rax        #  john -> %rax
+        movl    32(%rax),%ecx           #  ^.[32+%rax] -> %ecx
+        movl    $-8,%eax                #  -8 -> %eax
+        movl    $12,%edx                #  12 -> %edx
+        movl    -1312(%rbp),%ebx        #  i -> %ebx
+        imull   %ebx,%edx               #  %edx * %ebx -> %edx
+        addl    %edx,%eax               #  %eax + %edx -> %eax
+        cltq                            #  sign-extend
+        movl    %ecx,-1136(%rbp,%rax)   #  %ecx -> CHANGE[%rax]
+        movq    -992(%rbp),%rax         #  ptr -> %rax
+        movq    8(%rax),%rcx            #  ^.[8+%rax] -> %rcx
+        movq    %rcx,-992(%rbp)         #  %rcx -> ptr
+        movl    -1312(%rbp),%eax        #  i -> %eax
         movl    $1,%ecx                 #  1 -> %ecx
         addl    %ecx,%eax               #  %eax + %ecx -> %eax
-        movl    %eax,-32(%rbp)          #  %eax -> i
-        jmp     .L1                     #  jump
-.L4:
+        movl    %eax,-1312(%rbp)        #  %eax -> i
+        jmp     .L2                     #  jump
+.L8:
+        movl    $.LC9,%edi              #  addr of literal .LC9
+        call    write                   #  write()
+        movl    -1312(%rbp),%eax        #  i -> %eax
+        movl    %eax,%edi               #  %eax -> %edi
+        call    writelni                #  writelni()
+        movl    $.LC10,%edi             #  addr of literal .LC10
+        call    write                   #  write()
+        movl    -1308(%rbp),%eax        #  sum -> %eax
+        movl    %eax,%edi               #  %eax -> %edi
+        call    writelni                #  writelni()
+        movl    $.LC11,%edi             #  addr of literal .LC11
+        call    write                   #  write()
+        movq    -1000(%rbp),%rax        #  fred -> %rax
+        movsd   24(%rax),%xmm0          #  ^.[24+%rax] -> %xmm0
+        call    writelnf                #  writelnf()
+        movl    -1308(%rbp),%eax        #  sum -> %eax
+        movl    $3,%ecx                 #  3 -> %ecx
+        jl      .L12                    #  jump if     <
+        jmp     .L13                    #  jump
+.L12:
+        jmp     .L0                     #  jump
+.L13:
 # ----------------------- begin Epilogue code ---------------------------
         movq    %r9, %rbx        # restore %rbx (callee-saved) from %r9
         leave
@@ -79,29 +141,26 @@ graph1:
         .size   graph1, .-graph1
 # ----------------- end Epilogue; Literal data follows ------------------
         .section        .rodata
-        .align 16
-.LC666:                    # constant for floating negation
-        .long   0
-        .long   -2147483648
-        .long   0
-        .long   0
         .align  4
-.LC8:
-        .string " "
+.LC9:
+        .string "i = "
+        .align  4
+.LC10:
+        .string "Sum of ages = "
         .align  4
 .LC11:
-        .string "*"
+        .string "Fred loc im = "
+        .align  8
+.LC4:
+        .long   0       #  40000.000000
+        .long   1088653312
         .align  8
 .LC5:
-        .long   0       #  0.062500
-        .long   1068498944
+        .long   0       #  3.000000
+        .long   1074266112
         .align  8
 .LC6:
-        .long   0       #  6.283180
-        .long   1075388922
-        .align  8
-.LC7:
-        .long   0       #  32.000000
-        .long   1077936128
+        .long   0       #  4.500000
+        .long   1074921472
 
         .ident  "CS 375 Compiler - Summer 2013"

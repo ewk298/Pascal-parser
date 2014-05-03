@@ -187,7 +187,7 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
 			 | IDENTIFIER					{$$ = findid($1);/* want to replace constants with actual value here?? */}
 			 ;
 			 
-  expr       : IDENTIFIER LT NUMBER				{$$ = binop($2, $1, $3);}
+  expr       : IDENTIFIER LT NUMBER				{findid($1); $$ = binop($2, $1, $3);}
   			 | IDENTIFIER EQ expr				{findid($1); $$ = binop($2, $1, $3);}
 			 | expr PLUS term                 { $$ = binop($2, $1, $3); }
 			 | factor TIMES factor					{ $$ = binop($2, $1, $3);}
