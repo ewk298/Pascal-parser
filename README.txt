@@ -1,4 +1,4 @@
 Nicolas Vasquez
 nav346
 
-My program has an extra shift/reduce conflict that I wasn't eliminate.
+My program produces the correct assembly for both graph1.pas and pasrec.pas

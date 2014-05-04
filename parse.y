@@ -194,7 +194,7 @@ variable	 : variable LBRACKET arglist RBRACKET		{$$ = arrayref($1, $2, $3, $4);}
 			 | MINUS factor						{$$ = unaryop($1, $2);}
 			 | factor MINUS factor				{$$ = binop($2, $1, $3);}
 			 | term NE term						{$$ = binop($2, $1, $3);} 
-			 | STRING							{printf("%d\n", $1->datatype);}
+			 | STRING							{/*printf("%d\n", $1->datatype);*/}
              |  term 
 			 | factor
              ;
@@ -794,10 +794,10 @@ TOKEN findtype(TOKEN tok){
 TOKEN findid(TOKEN tok){
 	SYMBOL result = searchst(tok->stringval);
 	TOKEN constant_val = copytoken(tok);
-	printf("looking for %s in symbol table\n", tok->stringval);
+	//printf("looking for %s in symbol table\n", tok->stringval);
 	//if id is in symbol table and 
 	if((result != NULL) && (result->kind == CONSTSYM)){
-		printf("found\n");
+		//printf("found\n");
 		constant_val->tokentype = NUMBERTOK;
 		constant_val->datatype = result->basicdt;			//copy datatype
 		//printf("datatype = %d\n", result->basicdt); 
@@ -815,7 +815,7 @@ TOKEN findid(TOKEN tok){
 	}
 	//not a constant but fill in symentry for id
 	else if(result){
-		printf("found\n");
+		//printf("found\n");
 		tok->symentry = result;
 		tok->datatype = result->basicdt;
 	}
@@ -1023,7 +1023,7 @@ TOKEN makefuncall(TOKEN tok, TOKEN fn, TOKEN args)
 		
 		func->symentry = func_symbol;
 	}
-	printf("args datatype: %d\n", args->datatype);
+	//printf("args datatype: %d\n", args->datatype);
 	return func;
 }
 
@@ -1249,10 +1249,10 @@ main()
   { int res;
     initsyms();
     res = yyparse();
-    printst();
-    printf("yyparse result = %8d\n", res);
-    if (DEBUG & DB_PARSERES) dbugprinttok(parseresult);
-		ppexpr(parseresult);           /* Pretty-print the result tree */
+    //printst();
+    //printf("yyparse result = %8d\n", res);
+    /* if (DEBUG & DB_PARSERES) dbugprinttok(parseresult);
+		ppexpr(parseresult);          */
 		
 	gencode(parseresult, blockoffs[blocknumber], labelnumber);								//added for code generator
   }
